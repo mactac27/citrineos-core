@@ -59,3 +59,8 @@ out/
 
 # Generated certificate backup files
 **/certificates/*.pem.backup
+
+# vSparQ fork additions — sensitive dev config + local recovery artifacts
+apps/operator-ui/.env.local
+apps/operator-ui/.env.local.bak*
+backup/

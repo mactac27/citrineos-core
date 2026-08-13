@@ -1,0 +1,79 @@
+services:
+  # Pin CitrineOS to the last known-working image. Base compose uses
+  # `latest` + `pull_policy: always`, which silently upgraded us to
+  # v2.0.0-beta1 (image built 2026-08-05) and broke WebSocket auth for
+  # our sims — port :8081 started demanding Basic auth despite the
+  # config's `securityProfile: 0` setting. v2.0.0-alpha3 (2026-07-07)
+  # was the last release known to work with our sim + API setup.
+  # Also removing `pull_policy: always` so future `up -d` doesn't
+  # clobber the pin.
+  citrine:
+    image: ghcr.io/citrineos/citrineos-server:v2.0.0-alpha3
+    pull_policy: missing
+    restart: unless-stopped
+    labels:
+      - autoheal=true
+
+  amqp-broker:
+    volumes: !override
+      - rabbitmq_data:/var/lib/rabbitmq
+    # RabbitMQ segfaults under memory pressure inside the Colima VM (seen 2026-07-25).
+    # `unless-stopped` brings it back automatically on crash / VM restart, and only
+    # holds off if we explicitly `docker stop` it.
+    restart: unless-stopped
+    # `autoheal=true` label opts this container into the autoheal sidecar (below)
+    # which restarts containers stuck in the `unhealthy` health-state. Docker's
+    # restart policy alone only responds to non-zero exit codes, so a container
+    # that stays UP but goes deaf (RabbitMQ queue starvation, seen repeatedly)
+    # needs this second layer to recover automatically.
+    labels:
+      - autoheal=true
+    # TCP-port-connectivity check — fast and boot-tolerant. Attempted a
+    # broader `check_running && check_local_alarms` here but it failed
+    # during the ~75s boot window on Colima, causing autoheal to
+    # restart-loop the container before RabbitMQ finished booting. The
+    # observed AMQP starvation is caught downstream by watchdog-queues.sh
+    # instead (polls queue depth on the mgmt API).
+    healthcheck:
+      test: rabbitmq-diagnostics -q check_port_connectivity
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+  # Autoheal sidecar — watches container health state and restarts any
+  # container labeled `autoheal=true` that Docker marks `unhealthy`. Complements
+  # `restart: unless-stopped` (which only reacts to exit codes) so services
+  # that hang without crashing recover on their own. Tiny footprint (~10MB).
+  autoheal:
+    image: willfarrell/autoheal:latest
+    container_name: autoheal
+    restart: unless-stopped
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: "autoheal"
+      AUTOHEAL_INTERVAL: "30"
+      AUTOHEAL_START_PERIOD: "60"
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: "30"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  ocpp-db:
+    volumes: !override
+      - postgres_data:/var/lib/postgresql/data
+
+  minio:
+    volumes: !override
+      - minio_data:/data
+
+  # Move the operator UI from :3000 to :3030 to keep :3000 free.
+  # `restart: unless-stopped` so it survives Docker/Colima restarts
+  # once the `ui` profile brings it up (see start-stack.sh).
+  citrine-ui:
+    ports: !override
+      - "3030:3000"
+    restart: unless-stopped
+
+volumes:
+  rabbitmq_data:
+  postgres_data:
+  minio_data:
