@@ -17,6 +17,10 @@ export const ChargingStationSchema = BaseSchema.extend({
   id: z.number().int().optional(),
   ocppConnectionName: z.string().max(36),
   isOnline: z.boolean(),
+  // Operator-facing "Unit name" (e.g. "Bay 1", "Front lot fast").
+  // Nullable — when unset the operator UI falls back to a derived
+  // "{Constellation} · #N" label at query time.
+  displayName: z.string().max(80).nullable().optional(),
   protocol: OCPPVersionSchema.nullable().optional(),
   latestOcppMessageTimestamp: z.string().datetime().nullable().optional(),
   chargePointVendor: z.string().max(20).nullable().optional(),

@@ -81,6 +81,14 @@ export class ChargingStation extends Model implements ChargingStationDto {
   @Column(DataType.BOOLEAN)
   declare isOnline: boolean;
 
+  /**
+   * Operator-set display label ("Bay 1", "Front lot fast", …).
+   * Optional — when null, the operator UI derives a friendly
+   * fallback like "{Constellation} · #{N}" at query time.
+   */
+  @Column(DataType.STRING(80))
+  declare displayName?: string | null;
+
   @Column(DataType.STRING)
   declare protocol?: OCPPVersion | null;
 

@@ -1,0 +1,253 @@
+/*
+ * Specula Keycloak login theme — mirrors the operator-ui /login page
+ * (dark translucent card on nebula background). Kept self-contained
+ * so we can preview outside Keycloak by opening login.ftl in a
+ * browser with mock values.
+ */
+
+/* Reset + base ------------------------------------------------------------ */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+body.specula-login {
+  min-height: 100vh;
+  color: #ffffff;
+  background-color: #000;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Roobert",
+               "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  position: relative;
+}
+
+/* Darkening layer on top of the nebula, matching operator-ui bg-black/45 */
+.specula-bg-tint {
+  position: absolute; inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+/* Layout ----------------------------------------------------------------- */
+.specula-layout {
+  position: relative;
+  min-height: 100vh;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 40px 32px;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: center;
+  gap: 64px;
+}
+
+@media (min-width: 1024px) {
+  .specula-layout {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Login card ------------------------------------------------------------- */
+.specula-card {
+  width: 100%;
+  max-width: 520px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 40px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.40);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.specula-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 40px;
+}
+.specula-logo {
+  width: 40px;
+  height: 40px;
+  display: block;
+  flex-shrink: 0;
+}
+.specula-brand {
+  color: #8b3a1a;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.specula-brand .specula-brand-sub {
+  color: #f5b342;
+  font-size: 14px;
+  font-weight: 300;
+  opacity: 0.9;
+}
+.specula-brand .specula-brand-by {
+  color: #f5b342;
+  font-size: 12px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.specula-title {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.specula-lede {
+  margin-top: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.60);
+}
+
+/* Form ------------------------------------------------------------------- */
+.specula-form { margin-top: 32px; }
+.specula-field { margin-bottom: 20px; }
+
+.specula-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.70);
+}
+
+.specula-field input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.specula-field input::placeholder { color: rgba(255, 255, 255, 0.30); }
+
+.specula-field input:focus {
+  border-color: rgba(255, 255, 255, 0.30);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10);
+}
+
+.specula-field input[aria-invalid="true"] {
+  border-color: rgba(248, 113, 113, 0.60);
+}
+
+.specula-field-utility {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+}
+.specula-field-utility a {
+  color: rgba(255, 255, 255, 0.60);
+  font-size: 12px;
+  text-decoration: none;
+}
+.specula-field-utility a:hover { color: rgba(255, 255, 255, 0.90); }
+
+/* Submit ---------------------------------------------------------------- */
+.specula-submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background-color: #f5b342;
+  color: #000;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  border: none;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.specula-submit:hover  { background-color: #e6a232; }
+.specula-submit:active { background-color: #d09025; }
+.specula-submit:disabled {
+  opacity: 0.60;
+  cursor: not-allowed;
+}
+
+/* Alert (flash error) --------------------------------------------------- */
+.specula-alert {
+  margin-top: 24px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(248, 113, 113, 0.40);
+  background: rgba(239, 68, 68, 0.10);
+  color: rgb(254, 202, 202);
+  font-size: 14px;
+}
+
+/* Footer links ---------------------------------------------------------- */
+.specula-foot {
+  margin-top: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.50);
+}
+.specula-foot a {
+  color: rgba(255, 255, 255, 0.80);
+  text-decoration: none;
+}
+.specula-foot a:hover { color: #ffffff; }
+
+/* Right marketing pane -------------------------------------------------- */
+.specula-marketing {
+  display: none;
+  color: #fff;
+  max-width: 640px;
+}
+
+@media (min-width: 1024px) {
+  .specula-marketing { display: block; }
+}
+
+.specula-marketing h2 {
+  font-size: 48px;
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.specula-marketing p {
+  margin-top: 32px;
+  font-size: 16px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.80);
+}
+
+.specula-dots {
+  margin-top: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.specula-dots span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.40);
+}
+.specula-dots span.active {
+  width: 32px;
+  background: #ffffff;
+}

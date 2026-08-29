@@ -64,3 +64,7 @@ out/
 apps/operator-ui/.env.local
 apps/operator-ui/.env.local.bak*
 backup/
+# Keycloak realm exports carry client secrets + user credential
+# values. Keep locally; templatize + move to env vars before ever
+# committing. Themes (Keycloak login templates) are safe to commit.
+keycloak/realms/

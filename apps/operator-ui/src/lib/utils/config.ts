@@ -6,6 +6,9 @@ import { type AuthProviderType, AuthProviderTypeEnum } from '../providers/auth-p
 
 const getConfig: () => {
   appName: string;
+  operatorCompany: string;
+  operatorCountry: string; // ISO 3166-1 alpha-2 (e.g. "TT")
+  isEnsoledusAdmin: boolean;
   googleMapsApiKey: string;
   googleMapsAddressApiKey: string;
   googleMapsLocationPickerMapId?: string;
@@ -47,6 +50,9 @@ const getConfig: () => {
 
   return {
     appName: process.env.NEXT_PUBLIC_APP_NAME || 'CitrineOS',
+    operatorCompany: process.env.NEXT_PUBLIC_OPERATOR_COMPANY || '',
+    operatorCountry: process.env.NEXT_PUBLIC_OPERATOR_COUNTRY || '',
+    isEnsoledusAdmin: process.env.NEXT_PUBLIC_IS_ENSOLEDUS_ADMIN === 'true',
     bannerMessage: process.env.NEXT_PUBLIC_BANNER_MESSAGE,
     googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY || 'YOUR_GOOGLE_MAPS_API_KEY',
     googleMapsAddressApiKey:

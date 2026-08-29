@@ -25,6 +25,8 @@ export const LOCATIONS_LIST_QUERY = gql`
       updatedAt
       timeZone
       parkingType
+      facilities
+      openingHours
       chargingPool: ChargingStations(where: $chargingStationsWhere) {
         id
         ocppConnectionName

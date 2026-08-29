@@ -227,7 +227,16 @@ export const createGenericAuthProvider = (
       saveToken(mockToken);
       saveUser({ ...genericAdminUser, email });
 
-      window.location.href = '/overview';
+      // NOTE: do NOT `window.location.href = '/overview'` here — that
+      // forces a full page reload, which tears down the React tree
+      // (including the LoaderPresenceProvider's `visible=true` state
+      // from the login page). The result: the loader appears on
+      // /login, gets destroyed by the reload, then remounts on
+      // /overview and animates fresh — the flash-in-disappear-
+      // reappear cycle the user was reporting.
+      //
+      // Refine handles the returned `redirectTo` via its own client-
+      // side router.push, which preserves the React tree.
       return {
         success: true,
         redirectTo: '/overview',

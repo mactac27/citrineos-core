@@ -14,7 +14,11 @@ const withNextIntl = createNextIntlPlugin(resolve(__dirname, 'src/lib/i18n/reque
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
-  transpilePackages: ['@citrineos/base'],
+  // `transpilePackages` was forcing Next to compile @citrineos/base from
+  // source (packages/base/index.ts), which uses ESM ./x.js extensions
+  // that only work post-tsc — module-not-found for every re-export.
+  // Removed once we started building @citrineos/base via `pnpm build`
+  // so it resolves via package.json's `main: dist/index.js`.
   // Trace from the monorepo root so the standalone output bundles workspace
   // dependencies (@citrineos/base) correctly.
   outputFileTracingRoot: resolve(__dirname, '../..'),

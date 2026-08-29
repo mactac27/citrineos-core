@@ -73,7 +73,16 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} className={roobertFont.variable} suppressHydrationWarning>
-      <body>
+      {/*
+       * `suppressHydrationWarning` also on <body> — Grammarly (and
+       * some other browser extensions) inject data-* attributes onto
+       * the body element before React hydrates, causing an SSR/client
+       * attribute mismatch that unmounts the whole tree (white screen).
+       * The suppression only prevents WARNING and tree-abandon on this
+       * element's attributes — it doesn't affect real hydration errors
+       * inside the body's subtree.
+       */}
+      <body suppressHydrationWarning>
         <NextIntlClientProvider locale={locale} messages={{ ...fallbackMessages, ...messages }}>
           <NuqsAdapter>
             <Providers defaultMode={mode}>{children}</Providers>

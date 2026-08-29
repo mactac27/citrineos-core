@@ -49,15 +49,19 @@
 :root {
   --radius: 0.375rem;
 
-  /* Light mode colors */
-  --background: oklch(1 0 0);
+  /* Light mode colors — vSparQ / Specula rebrand:
+     primary switched from CitrineOS amber #ffae0b to brand green
+     #05B084 (matches iOS app). Background moved from pure white to
+     the warm off-white the Specula Figma uses so cards read with
+     more contrast on the canvas. */
+  --background: #f2f2f0;
   --foreground: #131211;
   --card: oklch(1 0 0);
   --card-foreground: #131211;
   --popover: oklch(1 0 0);
   --popover-foreground: #131211;
-  --primary: #ffae0b;
-  --primary-foreground: #6e4900;
+  --primary: #05B084;
+  --primary-foreground: #ffffff;
   --secondary: #a5b2ff;
   --secondary-foreground: #000d37;
   --muted: #e7e6e4;
@@ -105,4 +109,140 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Chart rise-in — used by the overview metric tiles' sparklines.
+   Anchored at the bottom so the chart appears to grow up from the
+   baseline every time it mounts. */
+@keyframes tile-chart-rise {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+
+/* Sonar ping — concentric rings expanding outward from the logo
+   during the full-screen loading state. Starts flush with the
+   logo (108) and grows to 156 (scale 1.444) before fading fully.
+   Slow cycle so it reads as a calm, deliberate heartbeat rather
+   than a nervous spinner. */
+@keyframes sonar-ping {
+  0%   { transform: scale(1);     opacity: 0.65; }
+  80%  { opacity: 0; }
+  100% { transform: scale(1.444); opacity: 0; }
+}
+
+/* Icon breathe — subtle scale in/out on the logo so it feels alive
+   while the sonar rings do their outward pulse. */
+@keyframes logo-breathe {
+  0%, 100% { transform: scale(1);    }
+  50%      { transform: scale(1.04); }
+}
+
+/* Registered angle custom property so a conic-gradient's `from`
+   angle can be animated smoothly. Without @property, browsers
+   treat --angle as a raw string and can't interpolate between
+   values — the animation would jump instead of sweeping. */
+@property --conic-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Rotates the conic-gradient border on focused constellation cards.
+   Slow, continuous, linear so it reads as a calm sheen sweep rather
+   than a frantic loading spinner.
+   Left in place in case another surface reuses the conic approach —
+   the constellation-card beam has since moved to SVG for uniform
+   perimeter speed (see `beam-sweep` below). */
+@keyframes conic-spin {
+  to { --conic-angle: 360deg; }
+}
+
+/* Slides an SVG stroke's dashoffset around the perimeter of a
+   rounded-rect at uniform arc-length speed. Used with pathLength=100,
+   so a full 100-unit sweep = one lap around the border regardless of
+   the rect's actual dimensions or aspect ratio. Constant speed at
+   corners — no more angular acceleration like conic-gradient has. */
+@keyframes beam-sweep {
+  to { stroke-dashoffset: -100; }
+}
+
+/* Page-header entrance — left-hand block (title + count) slides in
+   from the left as the shell arrives. Travel + timing match the
+   Overview page's greeting entrance (framer-motion, x: -15 → 0,
+   0.55s ease-in) so the two pages read as one system. */
+@keyframes slide-in-left {
+  from { transform: translateX(-15px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+/* Page-header entrance — right-hand controls drop in from the top
+   with a per-item stagger for a left-to-right cascade. Individual
+   items set their own `animation-delay`. */
+@keyframes slide-in-top {
+  from { transform: translateY(-12px); opacity: 0; }
+  to   { transform: translateY(0);     opacity: 1; }
+}
+
+/* List-row cascade — very subtle slide-in-from-left + fade.
+   Applied with a staggered `animation-delay` on each row so a
+   list of items reveals itself top-to-bottom instead of dumping
+   in at once. `both` fill-mode holds the starting frame during
+   the delay so nothing paints out-of-place. */
+@keyframes row-cascade-in {
+  from { transform: translateX(-6px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+.row-cascade {
+  animation: row-cascade-in 480ms ease-out both;
+  animation-delay: var(--row-cascade-delay, 0ms);
+}
+
+/* Status-dot pulse — a coloured `box-shadow` ring that grows out
+   from the dot and fades to transparent, on loop. Consumer sets
+   `--pulse-color` inline to match the dot's fill (green / amber /
+   red for online / partial / offline). Peak ring reaches ~1.25×
+   the visible pulse of the earlier 1.5× tuning (5px → 4px
+   spread). Timing matches the calm-heartbeat tone the app uses
+   elsewhere (sonar ping on the loader). */
+@keyframes status-dot-pulse {
+  0%   { box-shadow: 0 0 0 0px var(--pulse-color); }
+  100% { box-shadow: 0 0 0 4px transparent; }
+}
+
+/* --- Chrome autofill override -------------------------------------
+ * Chrome forces a pale yellow/mauve background + dark text on any
+ * input it autofilled from saved credentials. That's a browser
+ * security cue, not a real bg/color you can override with the
+ * normal `background`/`color` properties — those get ignored inside
+ * the `:-webkit-autofill` pseudo-state.
+ *
+ * The classic workaround:
+ *   1. `box-shadow` with a huge inset. Chrome DOESN'T touch box-
+ *      shadow, so a solid-colored inset shadow paints over the
+ *      autofill background from within. Any input can opt in by
+ *      setting `--autofill-fill` on itself or an ancestor.
+ *   2. `-webkit-text-fill-color` overrides the forced dark text.
+ *   3. Long transition-delay prevents the autofill bg from ever
+ *      animating in visibly when Chrome fills the field on load.
+ *
+ * Applied globally so every autofilled input in the app inherits
+ * the treatment. The `--autofill-fill` variable defaults to the
+ * dark login-card fill; override it per-surface if a lighter one
+ * is ever needed (e.g. white cards on the ops tables).
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 1000px var(--autofill-fill, rgba(20, 20, 20, 0.92)) inset !important;
+  box-shadow: 0 0 0 1000px var(--autofill-fill, rgba(20, 20, 20, 0.92)) inset !important;
+  -webkit-text-fill-color: var(--autofill-text, #ffffff) !important;
+  caret-color: var(--autofill-text, #ffffff) !important;
+  transition: background-color 9999s ease-in-out 0s !important;
+  /* No border-radius override — the input's own Tailwind class
+     (rounded-lg / rounded-md / etc.) already applies to the inset
+     box-shadow; inheriting from the parent would drop it to 0. */
 }

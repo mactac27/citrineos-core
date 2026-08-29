@@ -4,6 +4,7 @@
 'use client';
 
 import { ThemeProvider } from '@ferdiunal/refine-shadcn';
+import { LoaderPresenceProvider } from '@lib/client/hooks/use.loader.presence';
 import { Toaster } from '@lib/client/components/ui/sonner';
 import { createAccessProvider } from '@lib/providers/access-control-provider';
 import { authProvider } from '@lib/providers/auth-provider';
@@ -101,7 +102,11 @@ export function Providers({
                 },
               }}
             >
-              {children}
+              {/* Loader lives here so it stays mounted across page
+                  navigations (login → overview). Individual pages
+                  toggle it via useLoaderPresence() instead of
+                  rendering their own <LogoSonarLoader />. */}
+              <LoaderPresenceProvider>{children}</LoaderPresenceProvider>
             </Refine>
             {/* </Suspense>
             </DevtoolsProvider> */}

@@ -14,6 +14,7 @@ export const CHARGING_STATIONS_LIST_QUERY = gql`
     ChargingStations(offset: $offset, limit: $limit, order_by: $order_by, where: $where) {
       id
       ocppConnectionName
+      displayName
       isOnline
       protocol
       locationId
