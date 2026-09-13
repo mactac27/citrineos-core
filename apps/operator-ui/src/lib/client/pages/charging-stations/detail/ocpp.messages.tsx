@@ -26,16 +26,25 @@ import { GET_OCPP_MESSAGES_LIST_FOR_STATION } from '@lib/queries/ocpp.messages';
 import { ResourceType } from '@lib/utils/access.types';
 import { getPlainToInstanceOptions } from '@lib/utils/tables';
 import { type LogicalFilter, useInvalidate, useList, useTranslate } from '@refinedev/core';
-import { Copy, Download, Link, RefreshCw } from 'lucide-react';
+import { Check, Copy, Download, Filter, Link, RefreshCw, Search, X } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import debounce from 'lodash.debounce';
+import { Popover, PopoverContent, PopoverTrigger } from '@lib/client/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@lib/client/components/ui/command';
+import { cn } from '@lib/utils/cn';
 import { CollapsibleOCPPMessageViewer } from './collapsible.ocpp.message.viewer';
 import { buttonIconSize } from '@lib/client/styles/icon';
 import { TimestampDisplay } from '@lib/client/components/timestamp-display';
 import { Table } from '@lib/client/components/table';
 import type { CellContext } from '@tanstack/react-table';
 import { copy } from '@lib/utils/copy';
-import { DebounceSearch } from '@lib/client/components/debounce-search';
-import { MultiSelect } from '@lib/client/components/multi-select';
 import { OCPPMessagesExportDialog } from '@lib/client/pages/charging-stations/detail/ocpp.messages.export.dialog';
 import { DateTimePicker } from '@lib/client/components/ui/date-time-picker';
 import { parseAsJson, useQueryState } from 'nuqs';
@@ -242,8 +251,13 @@ export const OCPPMessages: React.FC<OCPPMessagesProps> = ({
     <>
       <div className="flex flex-col gap-4 w-full">
         <div className="flex items-center justify-between gap-2">
-          <Button variant="secondary" onClick={() => setExportDialogOpen(true)}>
-            <Download className={buttonIconSize} />
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setExportDialogOpen(true)}
+            className="cursor-pointer gap-1.5 bg-foreground text-[10px] font-medium uppercase tracking-widest text-background hover:bg-foreground/90"
+          >
+            <Download className="size-3.5" />
             {translate('buttons.exportToCsv')}
           </Button>
           <div className="flex items-center gap-3">
@@ -261,26 +275,25 @@ export const OCPPMessages: React.FC<OCPPMessagesProps> = ({
             <Label className="font-medium">{translate('ChargingStations.liveLog')}</Label>
           </div>
         </div>
-        <div className="grid grid-cols-5 gap-2 w-full">
-          <DebounceSearch
+        <div className="flex flex-wrap items-center gap-2 w-full">
+          <PillSearchInput
             onSearch={setSearchCid}
             placeholder={translate('ChargingStations.ocppMessages.searchCorrelationId')}
-            className="relative w-full"
           />
-          <MultiSelect
+          <ActionFilterPopover
             options={actionOptions}
-            selectedValues={selectedActions}
-            setSelectedValues={setSelectedActions}
-            placeholder={translate('ChargingStations.ocppMessages.selectActions')}
+            selected={selectedActions}
+            onChange={setSelectedActions}
             searchPlaceholder={translate('ChargingStations.ocppMessages.searchActions')}
+            tooltipLabel={translate('ChargingStations.ocppMessages.selectActions', 'Filter actions')}
           />
           <Select value={selectedOrigin ?? ''} onValueChange={setSelectedOrigin}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="h-auto w-auto cursor-pointer rounded-full border-border bg-background px-3 py-1.5 text-xs shadow-none focus-visible:border-foreground/30 focus-visible:ring-foreground/10">
               <SelectValue placeholder={translate('ChargingStations.ocppMessages.filterOrigins')} />
             </SelectTrigger>
             <SelectContent>
               {originOptions.map((opt) => (
-                <SelectItem key={opt.label} value={opt.value}>
+                <SelectItem key={opt.label} value={opt.value} className="cursor-pointer text-xs">
                   {opt.label}
                 </SelectItem>
               ))}
@@ -289,12 +302,14 @@ export const OCPPMessages: React.FC<OCPPMessagesProps> = ({
           <DateTimePicker
             date={startDate ?? undefined}
             onSelectDateAction={(date) => setStartDate(date ?? null)}
-            placeholder={translate('ChargingStations.ocppMessages.pickStartDate')}
+            placeholder={translate('ChargingStations.ocppMessages.pickStartDate', 'Start')}
+            triggerClassName="cursor-pointer data-[empty=true]:text-foreground/40 flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs shadow-none hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/10"
           />
           <DateTimePicker
             date={endDate ?? undefined}
             onSelectDateAction={(date) => setEndDate(date ?? null)}
-            placeholder={translate('ChargingStations.ocppMessages.pickEndDate')}
+            placeholder={translate('ChargingStations.ocppMessages.pickEndDate', 'End')}
+            triggerClassName="cursor-pointer data-[empty=true]:text-foreground/40 flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs shadow-none hover:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/10"
           />
         </div>
 
@@ -432,3 +447,151 @@ export const OCPPMessages: React.FC<OCPPMessagesProps> = ({
     </>
   );
 };
+
+// ─── Pill search input ─────────────────────────────────────────────
+//
+// Debounced search box shaped as a pill. Matches the search input
+// on the Chargers / Constellations list pages. Inline here rather
+// than reusing `DebounceSearch` because that shared component
+// wraps a rectangular shadcn `<Input>` and doesn't expose the
+// inner-input className.
+function PillSearchInput({
+  onSearch,
+  placeholder,
+  debounceInMillis = 300,
+}: {
+  onSearch: (value: string) => void;
+  placeholder: string;
+  debounceInMillis?: number;
+}) {
+  const [value, setValue] = useState('');
+  const debounced = useMemo(
+    () => debounce((next: string) => onSearch(next), debounceInMillis),
+    [onSearch, debounceInMillis],
+  );
+  useEffect(() => () => debounced.cancel(), [debounced]);
+  return (
+    <div className="relative w-64">
+      <Search
+        aria-hidden
+        className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-foreground/40"
+      />
+      <input
+        type="search"
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          debounced(e.target.value);
+        }}
+        placeholder={placeholder}
+        maxLength={100}
+        className="w-full rounded-full border border-border bg-background pl-9 pr-9 py-1.5 text-xs text-foreground placeholder:text-foreground/40 focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/10"
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => {
+            setValue('');
+            onSearch('');
+          }}
+          aria-label="Clear search"
+          className="absolute right-2 top-1/2 flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-foreground/40 hover:bg-foreground/5 hover:text-foreground"
+        >
+          <X className="size-3" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Action filter popover ─────────────────────────────────────────
+//
+// Icon-only trigger (Filter icon in a circle) that opens a
+// searchable checklist of OCPP call actions. Turns brand-green
+// when one or more actions are selected, with a circular count
+// badge in the top-right corner. Popover contents reuse the same
+// Command primitives shadcn's `MultiSelect` uses so keyboard
+// navigation + search behavior are identical.
+function ActionFilterPopover({
+  options,
+  selected,
+  onChange,
+  searchPlaceholder,
+  tooltipLabel,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  searchPlaceholder: string;
+  tooltipLabel: string;
+}) {
+  const active = selected.length > 0;
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={tooltipLabel}
+          className={cn(
+            'relative flex size-9 cursor-pointer items-center justify-center rounded-full border transition-colors',
+            active
+              ? 'border-[#05B084] bg-[#05B084]/10 text-[#05B084] hover:bg-[#05B084]/15'
+              : 'border-border bg-background text-foreground/60 hover:text-foreground',
+          )}
+        >
+          <Filter className="size-4" />
+          {active ? (
+            <span className="absolute -right-1 -top-1 flex size-4 min-w-4 items-center justify-center rounded-full bg-[#05B084] px-1 text-[9px] font-semibold leading-none text-white">
+              {selected.length}
+            </span>
+          ) : null}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} />
+          <CommandList>
+            <CommandEmpty>No actions found.</CommandEmpty>
+            <CommandGroup>
+              {options.map((action) => {
+                const isSelected = selected.includes(action);
+                return (
+                  <CommandItem
+                    key={action}
+                    onSelect={() => {
+                      onChange(
+                        isSelected
+                          ? selected.filter((a) => a !== action)
+                          : [...selected, action],
+                      );
+                    }}
+                    className="cursor-pointer text-xs"
+                  >
+                    <Check
+                      className={cn(
+                        'mr-2 size-3.5',
+                        isSelected ? 'opacity-100 text-[#05B084]' : 'opacity-0',
+                      )}
+                    />
+                    {action}
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+            {active ? (
+              <div className="border-t border-border/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => onChange([])}
+                  className="w-full cursor-pointer rounded px-2 py-1 text-left text-[11px] font-medium uppercase tracking-widest text-foreground/60 hover:bg-foreground/5 hover:text-foreground"
+                >
+                  Clear all
+                </button>
+              </div>
+            ) : null}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}

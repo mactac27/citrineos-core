@@ -149,10 +149,22 @@ export const OCPPMessagesExportDialog = ({
         </DialogHeader>
         {getMessageBasedOnFilters()}
         <DialogFooter>
-          <Button variant="outline" disabled={isLoading} onClick={() => onOpenChangeAction(false)}>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={isLoading}
+            onClick={() => onOpenChangeAction(false)}
+            className="cursor-pointer text-[10px] font-medium uppercase tracking-widest"
+          >
             {translate('buttons.cancel')}
           </Button>
-          <Button variant="secondary" disabled={isLoading} onClick={exportToCsv}>
+          <Button
+            variant="default"
+            size="sm"
+            disabled={isLoading}
+            onClick={exportToCsv}
+            className="cursor-pointer gap-1.5 bg-foreground text-[10px] font-medium uppercase tracking-widest text-background hover:bg-foreground/90"
+          >
             {translate('buttons.exportToCsv')}
           </Button>
         </DialogFooter>

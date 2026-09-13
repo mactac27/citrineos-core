@@ -37,7 +37,12 @@
   --radius-xl: calc(var(--radius) + 6px);
 
   /* Font */
-  --font-sans: var(--font-roobert), system-ui, sans-serif;
+  --font-sans: var(--font-satoshi), system-ui, sans-serif;
+  /* Monospace stack for `font-mono` utilities — Courier New leads
+     so protocol strings (OCPP enum values, IDs, tokens) render in
+     the same weight everywhere regardless of OS. Falls back to the
+     platform ui-monospace if the browser can't reach Courier. */
+  --font-mono: 'Courier New', Courier, ui-monospace, SFMono-Regular, Menlo, monospace;
 
   /* Non-themed Colors */
   --light-mode: #ffae0b;
@@ -108,6 +113,26 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Courier New at 400 reads too thin against the UI's sans stack.
+     600 gives protocol strings enough presence to read clearly at
+     small sizes without going full bold. Applies wherever the
+     `font-mono` utility is used. */
+  .font-mono {
+    font-weight: 550;
+  }
+
+  /* Tailwind's preflight resets `button` to `cursor: default`, so
+     bare <button> elements (not the shadcn <Button /> wrapper) read
+     as unclickable. Put the pointer back on every button, with the
+     standard disabled-state override so genuinely-disabled buttons
+     don't lie about being interactive. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
   }
 }
 
@@ -183,6 +208,72 @@
   to   { transform: translateY(0);     opacity: 1; }
 }
 
+/* Modal entrance / exit — fade + zoom + slide-from-below.
+   Tailwind v4 handles centering via the standalone `translate`
+   CSS property (`translate-x-[-50%] translate-y-[-50%]` on the
+   base DialogContent). Our animation only touches `transform`
+   (translateY + scale), so the two compose without fighting —
+   centering stays put, animation adds the slide + scale on top.
+
+   Applied via a single `.modal-anim` class that Radix's
+   data-state attribute picks up — no tailwindcss-animate needed. */
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes modal-exit {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+.modal-anim {
+  animation-fill-mode: both;
+}
+.modal-anim[data-state='open'] {
+  animation-name: modal-enter;
+  animation-timing-function: ease-out;
+  animation-duration: var(--modal-anim-duration-open, 400ms);
+}
+.modal-anim[data-state='closed'] {
+  animation-name: modal-exit;
+  animation-timing-function: ease-in;
+  animation-duration: var(--modal-anim-duration-close, 250ms);
+}
+
+/* Backdrop animation — fade only, matching the modal's timing so
+   the two motions feel like one gesture. */
+@keyframes modal-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes modal-overlay-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.modal-overlay-anim {
+  animation-duration: var(--modal-anim-duration, 400ms);
+  animation-fill-mode: both;
+}
+.modal-overlay-anim[data-state='open'] {
+  animation-name: modal-overlay-in;
+  animation-timing-function: ease-out;
+}
+.modal-overlay-anim[data-state='closed'] {
+  animation-name: modal-overlay-out;
+  animation-timing-function: ease-in;
+}
+
 /* List-row cascade — very subtle slide-in-from-left + fade.
    Applied with a staggered `animation-delay` on each row so a
    list of items reveals itself top-to-bottom instead of dumping
@@ -196,6 +287,435 @@
 .row-cascade {
   animation: row-cascade-in 480ms ease-out both;
   animation-delay: var(--row-cascade-delay, 0ms);
+}
+
+/* ─── Transaction detail modal — platform typography rewrite ─────────
+ * The modal renders the same `TransactionDetail` React tree that the
+ * full page uses. Rather than fork the component, we override its
+ * shadcn primitives' styling in-place with rules scoped by
+ * `data-detail-mode="modal"` (set on the wrapper in
+ * transaction.detail.tsx). This keeps the standalone page's look
+ * untouched and lets the modal read in the same dense, small-caps
+ * vocabulary as the Chargers / Constellations pages.
+ */
+
+/* Strip Card chrome (background, border, shadow, padding) so the
+   two sections don't read as nested white tiles inside the modal. */
+[data-detail-mode='modal'] [data-slot='card'] {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  gap: 0.75rem;
+}
+[data-detail-mode='modal'] [data-slot='card-content'] {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Inline calendar (react-day-picker via CalendarWithTime primitive)
+   inside the modal — align typography with the surrounding
+   micro-label vocabulary. Month caption + weekday header become
+   10px small-caps tracked muted; day numbers stay numeric but
+   drop to a lighter weight and smaller size for density. */
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-caption_label,
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-weekday {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgb(from var(--foreground) r g b / 0.6) !important;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day_button {
+  font-size: 11px !important;
+  font-weight: 500;
+}
+/* Selected day → round pill instead of a rounded square. Targets
+   the shadcn Calendar's `[data-selected-single="true"]` day
+   button (v9 react-day-picker exposes state via data-attrs on
+   the .rdp-day_button element). `!important` beats the primitive's
+   own rounded-md utility class. Today's underline / range chrome
+   are left alone. */
+[data-detail-mode='modal']
+  [data-slot='calendar']
+  .rdp-day_button[data-selected-single='true'],
+[data-detail-mode='modal']
+  [data-slot='calendar']
+  [data-selected-single='true']
+  .rdp-day_button {
+  border-radius: 9999px !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+/* Strip any background / focus chrome from the parent .rdp-day
+   cell around a selected day. shadcn's Calendar primitive adds
+   `bg-accent` in the `today` classname, and react-day-picker
+   ships default `.rdp-day_selected` styling that paints a
+   rounded grey block behind the button — both leak past the
+   circular button and read as a grey halo. Nuke them both. */
+[data-detail-mode='modal']
+  [data-slot='calendar']
+  .rdp-day:has(.rdp-day_button[data-selected-single='true']),
+[data-detail-mode='modal']
+  [data-slot='calendar']
+  .rdp-day[data-selected='true'] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+/* Kill the focus chrome on non-selected day buttons. The
+   Calendar primitive's day-button base applies `border-ring`
+   + `ring-ring/50 ring-[3px]` under
+   `group-data-[focused=true]/day` — react-day-picker sets
+   data-focused=true after any click, so the last-clicked day
+   keeps a rounded-square outline until you tab elsewhere.
+   Reads as chrome-noise inside the modal; strip it on every
+   day except the actively-selected one, which keeps its
+   green pill. */
+[data-detail-mode='modal']
+  [data-slot='calendar']
+  .rdp-day_button:not([data-selected-single='true']) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Expires pill glow — soft warm halo tinted with the theme's
+   warning colour (#ff7300 in light, #ffa45a in dark). Kept
+   small enough (~4-6px) to not spill past the section's
+   `overflow-hidden` clip, but still visible against the muted
+   modal surface. Gentle pulse so it reads as "alive". */
+@keyframes expiresGlowPulse {
+  0%, 100% {
+    box-shadow: 0 0 4px 0 rgb(from var(--warning) r g b / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 6px 0 rgb(from var(--warning) r g b / 0.55);
+  }
+}
+.expires-glow {
+  border-color: rgb(from var(--warning) r g b / 0.55) !important;
+  animation: expiresGlowPulse 2.6s ease-in-out infinite;
+}
+
+/* Day-cell enter animation. react-day-picker unmounts / remounts
+   every .rdp-day when the visible month changes, so a keyframe
+   named on .rdp-day fires fresh on every month switch. Fade +
+   slight lift (translateY) reads as the days settling in from
+   the top. Column-based stagger via nth-child (7 columns) gives
+   a subtle sweep-left-to-right feel without needing JS to set
+   per-cell delays.
+
+   Selected days ALSO re-mount when the month changes, so the
+   animation applies uniformly — no need to exclude them. */
+@keyframes rdpDayEnter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day {
+  animation: rdpDayEnter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day:nth-child(7n + 1) {
+  animation-delay: 0ms;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day:nth-child(7n + 2) {
+  animation-delay: 20ms;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day:nth-child(7n + 3) {
+  animation-delay: 40ms;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day:nth-child(7n + 4) {
+  animation-delay: 60ms;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day:nth-child(7n + 5) {
+  animation-delay: 80ms;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day:nth-child(7n + 6) {
+  animation-delay: 100ms;
+}
+[data-detail-mode='modal'] [data-slot='calendar'] .rdp-day:nth-child(7n) {
+  animation-delay: 120ms;
+}
+
+/* FormField labels — the shared form component wraps its label
+   text in a span with `formLabelStyle = 'text-base font-semibold'`
+   (big + heavy). Inside the detail modal that reads too loud
+   against the muted vocabulary the rest of the modal uses, so we
+   flatten it to the small-caps tracked micro-label style. Anchored
+   to the two-class combo `.text-base.font-semibold` inside a
+   `[data-slot='field-label']` — narrow enough to only match the
+   FormField label span. */
+[data-detail-mode='modal'] [data-slot='field-label'] .text-base.font-semibold {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgb(from var(--foreground) r g b / 0.6);
+  line-height: 1.4;
+}
+/* Required-field asterisk (`formRequiredAsterisk` in form/field.tsx
+   is `<span class="text-destructive">*</span>`) inherits the
+   parent's base text size — which in modal mode leaves it larger
+   than the 10px label sibling. FieldLabel is `flex items-center`
+   so the container's height = tallest child = the asterisk, and
+   labels WITH an asterisk end up taller than labels WITHOUT one.
+   That mismatch shifts every "required" field's control ~4px
+   lower than its non-required neighbours. Shrink the asterisk to
+   match the label so the wrapper height is consistent either way. */
+[data-detail-mode='modal'] [data-slot='field-label'] .text-destructive {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* FormField inputs — the shared `<Input>` renders as a bare
+   `<input>` inside a `[data-slot='field']` wrapper. Inside the
+   modal, drop the type + font-size to match the compact platform
+   inputs (see e.g. the New charger / New token modals). Height is
+   FIXED at 32px (not min-height / auto) so it stays in lockstep
+   with the custom triggers (picker, date picker) that also fix
+   themselves at 32px — otherwise content-driven growth on the
+   input makes the two controls visibly different heights. */
+[data-detail-mode='modal'] [data-slot='field'] input:not([type='checkbox']):not([type='radio']),
+[data-detail-mode='modal'] [data-slot='field'] select {
+  font-size: 12px !important;
+  padding: 0 10px !important;
+  height: 32px !important;
+  line-height: 1.2 !important;
+  box-sizing: border-box;
+}
+[data-detail-mode='modal'] [data-slot='field'] textarea {
+  font-size: 12px !important;
+  padding: 6px 10px !important;
+  min-height: 64px;
+  line-height: 1.4 !important;
+}
+
+/* Form Save button — the shared FormButton renders the default
+   `<Button>` (brand-primary green) for the save action. Inside
+   the modal, flip to the platform's black-fill tracked-label
+   primary. Cancel button (outline variant) becomes a ghost.
+   Scoped selectors so the modal header icon buttons (which sit
+   OUTSIDE the `data-detail-mode='modal'` wrapper) aren't touched. */
+[data-detail-mode='modal'] [data-slot='button'][type='submit'] {
+  background-color: var(--foreground) !important;
+  color: var(--background) !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.875rem;
+}
+[data-detail-mode='modal'] [data-slot='button'][type='submit']:hover {
+  background-color: rgb(from var(--foreground) r g b / 0.9) !important;
+}
+
+/* KeyValueDisplay — the default label is heavy accent-blue bold.
+   Rewrite to the platform's small-caps tracked micro-label. Only the
+   label class combo is targeted (safe — .text-accent-foreground +
+   .font-semibold together is rare outside KVD); value styling picks
+   up the platform look by cascading from the parent's smaller base. */
+[data-detail-mode='modal'] span.text-accent-foreground.font-semibold {
+  color: rgb(from var(--foreground) r g b / 0.5);
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+/* Give the KV wrapper a smaller base — cascades to whatever the
+   valueRender emits (plain span, link, badge). Same safe two-class
+   anchor as the label rule. */
+[data-detail-mode='modal'] span.text-accent-foreground.font-semibold + * {
+  font-size: 12px;
+  color: rgb(from var(--foreground) r g b / 0.85);
+}
+
+/* Clickable links inside the modal — drop the underline + primary-
+   color emphasis; use the platform's subtle hover-only affordance. */
+[data-detail-mode='modal'] .cursor-pointer.font-semibold.underline {
+  text-decoration: none;
+  font-weight: 500;
+  color: rgb(from var(--foreground) r g b / 0.85);
+  transition: color 120ms ease-out;
+}
+[data-detail-mode='modal'] .cursor-pointer.font-semibold.underline:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+/* Tabs — flatten the shadcn defaults. List gets no background, no
+   pill; triggers become small-caps tracked micro-buttons with a
+   simple underline on active. Reads like the sub-header chips on
+   the Constellations page. */
+[data-detail-mode='modal'] [data-slot='tabs-list'] {
+  background: transparent;
+  padding: 0;
+  gap: 0.25rem;
+  border-bottom: 1px solid rgb(from var(--border) r g b / 0.5);
+  border-radius: 0;
+  height: auto;
+  justify-content: flex-start;
+}
+[data-detail-mode='modal'] [data-slot='tabs-trigger'] {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgb(from var(--foreground) r g b / 0.5);
+  transition: color 120ms ease-out, border-color 120ms ease-out;
+}
+[data-detail-mode='modal'] [data-slot='tabs-trigger']:hover {
+  color: rgb(from var(--foreground) r g b / 0.8);
+}
+[data-detail-mode='modal'] [data-slot='tabs-trigger'][data-state='active'] {
+  color: var(--foreground);
+  /* No border-bottom color change here — a separate sliding
+     indicator element (see tabs-card component) renders the
+     active underline so it animates between tabs. */
+}
+
+/* Badge — tighten to a compact chip that reads as a status pill
+   without dominating the row. Keeps the semantic color (success /
+   destructive) inline via the existing variant classes. Uses
+   `!important` because shadcn Badge's `cva` base class carries
+   text-sm + px-2 py-0.5 in Tailwind's utilities layer, which
+   outranks a scoped attribute selector on cascade order. */
+[data-detail-mode='modal'] [data-slot='badge'] {
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.08em !important;
+  padding: 0.125rem 0.5rem !important;
+  border-radius: 9999px !important;
+}
+
+/* Tab panel transitions — sequential (exit → wait → enter) so text
+   from the two tabs never overlaps mid-swap. Coordinated by state
+   in `transaction.detail.tabs.card.tsx`:
+     Phase 1 (0–260ms):   old tab is active + outgoing, plays exit.
+     Phase 2 (260–360ms): wait — old tab holds at exit-end (opacity 0).
+     Phase 3 (360–720ms): Radix value swaps. Old tab → inactive but
+                          still outgoing (overlaid invisibly). New
+                          tab → active, plays enter.
+     Phase 4 (720ms+):    outgoing cleared, old tab drops to
+                          display:none. New tab is the sole visible.
+
+   Four rules cover the four (state × outgoing) combinations. */
+@keyframes tab-in-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes tab-out-to-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-24px);
+  }
+}
+/* Long-inactive: no layout, no visibility. */
+[data-detail-mode='modal'] .tab-panel[data-state='inactive']:not([data-outgoing='true']) {
+  display: none;
+}
+/* Phase 1 — currently-visible tab is being told to leave. Stays in
+   normal flow (so container height doesn't collapse) while playing
+   the exit animation. */
+[data-detail-mode='modal'] .tab-panel[data-state='active'][data-outgoing='true'] {
+  position: relative;
+  animation: tab-out-to-left 260ms cubic-bezier(0.4, 0, 1, 1) both;
+  pointer-events: none;
+}
+/* Phase 3 — Radix swapped values. Old tab is now inactive but still
+   outgoing; we override Radix's `hidden` attribute and overlay it
+   invisibly so its layout footprint disappears (new tab drives the
+   container height). No animation here — the exit already finished
+   in phase 1; `both` fill-mode on that keyframe would otherwise
+   contradict our static rest-state, so we set opacity/transform
+   directly instead. */
+[data-detail-mode='modal'] .tab-panel[data-state='inactive'][data-outgoing='true'] {
+  display: block !important;
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateX(-24px);
+  pointer-events: none;
+}
+/* Phase 3 — new tab plays enter animation with no delay because it
+   only becomes active AFTER the swap timer fires. */
+[data-detail-mode='modal'] .tab-panel[data-state='active']:not([data-outgoing='true']) {
+  position: relative;
+  animation: tab-in-from-right 360ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Table header row — the shared `tableHeaderRowStyle` applies
+   `bg-secondary` (brand lavender) to every table in the app. That
+   contrast is a leftover CitrineOS default that clashes with the
+   modal's cleaner surface, so strip it here. Cells inherit the
+   neutral background and read as plain small-caps column labels. */
+[data-detail-mode='modal'] [data-slot='table-header'] {
+  background: transparent;
+}
+/* Typography here inherits from the shared `tableHeaderTextStyle`
+   (11px small-caps tracked, muted foreground). Only density +
+   separator tweaks are modal-specific. */
+[data-detail-mode='modal'] [data-slot='table-head'] {
+  border-bottom: 1px solid rgb(from var(--border) r g b / 0.5);
+  height: 28px;
+  padding: 0.25rem 0.5rem;
+}
+/* Body cells — tighten padding + drop to 12px so rows read denser,
+   matching the row rhythm on the Chargers / Constellations tables.
+   `!important` on font-size beats child utilities (TableCellLink
+   etc. bake their own text-sm/text-base) so the whole cell renders
+   at one consistent size. */
+[data-detail-mode='modal'] [data-slot='table-cell'] {
+  padding: 0.5rem !important;
+  font-size: 12px !important;
+  color: rgb(from var(--foreground) r g b / 0.85);
+}
+[data-detail-mode='modal'] [data-slot='table-cell'] *:not([data-slot='badge']) {
+  font-size: inherit !important;
+}
+[data-detail-mode='modal'] [data-slot='table-row'] {
+  transition: background-color 120ms ease-out;
+}
+[data-detail-mode='modal'] [data-slot='table-row']:hover {
+  background-color: rgb(from var(--foreground) r g b / 0.03);
+}
+
+/* Marquee text — right-edge fade at rest cues "more content".
+   When the nearest `group/tile` ancestor is hovered, the mask
+   lifts entirely so every character passes through the visible
+   window crisp on the scroll. */
+.marquee-outer {
+  mask-image: linear-gradient(to right, black calc(100% - 20px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 20px), transparent 100%);
+  transition: mask-image 120ms linear, -webkit-mask-image 120ms linear;
+}
+.group\/tile:hover .marquee-outer {
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 /* Status-dot pulse — a coloured `box-shadow` ring that grows out

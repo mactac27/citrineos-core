@@ -21,21 +21,34 @@ import { Switch } from '@lib/client/components/ui/switch';
 import { useShellArrival } from '@lib/client/hooks/use.shell.arrival';
 import { ConstellationCreateModal } from '@lib/client/pages/locations/list/constellation.create.modal';
 import { ConstellationDetailPanel } from '@lib/client/pages/locations/list/constellation.detail.panel';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@lib/client/components/ui/select';
 import { LOCATIONS_LIST_QUERY } from '@lib/queries/locations';
 import { ActionType, ResourceType } from '@lib/utils/access.types';
 import { AccessDeniedFallback } from '@lib/utils/AccessDeniedFallback';
 import config from '@lib/utils/config';
 import { CanAccess, useDeleteMany, useList, useUpdateMany } from '@refinedev/core';
-import { Download, ListChecks, Loader2, Plus, Search, Trash2, X, Zap } from 'lucide-react';
+import {
+  ArrowDownAZ,
+  ArrowDownZA,
+  Download,
+  Layers,
+  ListChecks,
+  Loader2,
+  Plus,
+  Radio,
+  Search,
+  TriangleAlert,
+  Trash2,
+  Unplug,
+  X,
+  Zap,
+} from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@lib/client/components/ui/tooltip';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MapRef } from 'react-map-gl/mapbox';
 import { Map as MapboxMap, Marker } from 'react-map-gl/mapbox';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -77,7 +90,13 @@ export const LocationsList = () => {
         }
       : { opacity: 0, transform: 'translateY(-12px)' };
   const [query, setQuery] = useState('');
-  const [regionFilter, setRegionFilter] = useState('');
+  // Multi-select country filter — replaces the old single-select
+  // dropdown next to the search bar. Pills are rendered in the
+  // sub-header only when `groupByCountry` is on; toggling group
+  // off clears the selection so there's no invisible filter.
+  const [selectedCountries, setSelectedCountries] = useState<Set<string>>(
+    new Set(),
+  );
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   /// The card whose detail panel is taking over the RHS. Also
   /// doubles as the "focused pin" state for the map — isolates
@@ -113,6 +132,32 @@ export const LocationsList = () => {
   // Create-constellation modal — the "+ New constellation" button
   // opens this instead of routing to /locations/new.
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Card sub-header options — sort direction (A→Z / Z→A), status
+  // filter (all / online / alerting / offline based on the
+  // per-card dot color), and a group-by-country toggle that
+  // stacks on top of whatever sort + filter is active.
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'online' | 'alerting' | 'offline'
+  >('all');
+  const [groupByCountry, setGroupByCountry] = useState(false);
+  // Clear country selection when group mode ends — otherwise the
+  // filter stays applied but the UI to change it is hidden.
+  useEffect(() => {
+    if (!groupByCountry && selectedCountries.size > 0) {
+      setSelectedCountries(new Set());
+    }
+  }, [groupByCountry, selectedCountries.size]);
+
+  const toggleCountry = useCallback((country: string) => {
+    setSelectedCountries((prev) => {
+      const next = new Set(prev);
+      if (next.has(country)) next.delete(country);
+      else next.add(country);
+      return next;
+    });
+  }, []);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
@@ -149,7 +194,6 @@ export const LocationsList = () => {
   // country to filter by anyway. Country dropdown grows organically
   // as new sites are onboarded.
   const regionKey = 'country' as const;
-  const regionLabel = 'Country';
   // Normalize each raw country value ("JM", "Jamaica", "Trinidad And
   // Tobago", "TT", …) to its canonical display name BEFORE dedup so
   // the dropdown shows one row per real-world country instead of one
@@ -162,12 +206,14 @@ export const LocationsList = () => {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return all.filter((c) => {
-      if (
-        regionFilter &&
-        canonicalCountry(String(c[regionKey] ?? '')) !== regionFilter
-      ) {
-        return false;
+    const base = all.filter((c) => {
+      if (selectedCountries.size > 0) {
+        const country = canonicalCountry(String(c[regionKey] ?? ''));
+        if (!selectedCountries.has(country)) return false;
+      }
+      if (statusFilter !== 'all') {
+        const health = cardHealth(c);
+        if (statusFilter !== health) return false;
       }
       if (!q) return true;
       const n = String(c.name ?? '').toLowerCase();
@@ -175,7 +221,15 @@ export const LocationsList = () => {
       const city = String(c.city ?? '').toLowerCase();
       return n.includes(q) || a.includes(q) || city.includes(q);
     });
-  }, [all, query, regionFilter]);
+    // Sort AFTER filtering so ordering is deterministic across
+    // filter changes. Locale-aware compare so "Ábaco" sorts near
+    // "Abaco" rather than at the top or bottom.
+    const sorted = [...base].sort((a, b) => {
+      const cmp = String(a.name ?? '').localeCompare(String(b.name ?? ''));
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+    return sorted;
+  }, [all, query, selectedCountries, statusFilter, sortDir]);
 
   // If the open site drops out of the filtered set (search /
   // region filter change while the takeover is up), leave the
@@ -352,6 +406,62 @@ export const LocationsList = () => {
     }
   }, [all, mutateDeleteMany, mutateUpdateMany, selectedIds]);
 
+  /// Renders a single constellation card `<li>` with all its
+  /// state coupling (open/sibling/cascade, bulk selection, hover
+  /// glow). Extracted so both the flat list and the grouped
+  /// sections can call it — same closure, same behavior.
+  const renderCard = (c: Constellation, i: number) => {
+    const idStr = String(c.id);
+    const isOpen = openId === idStr;
+    const isSibling = !!openId && !isOpen;
+    const staggerDelay = Math.min(i * 18, 140);
+    const cascadeDelay = !arrived
+      ? null
+      : rowsCascade
+        ? 550 + Math.min(i * 40, 480)
+        : Math.min(i * 25, 300);
+    const cascadeStyle: React.CSSProperties | undefined =
+      cascadeDelay != null
+        ? ({
+            ['--row-cascade-delay' as string]: `${cascadeDelay}ms`,
+          } as React.CSSProperties)
+        : undefined;
+    return (
+      <li
+        key={c.id ?? c.name}
+        style={{
+          transformOrigin: 'center',
+          transform: isSibling ? 'scale(0)' : 'scale(1)',
+          opacity: isSibling ? 0 : 1,
+          visibility: isOpen && panelMounted ? 'hidden' : 'visible',
+          transition: isSibling
+            ? `transform 240ms cubic-bezier(0.4,0,0.2,1) ${staggerDelay}ms, opacity 240ms ease-in ${staggerDelay}ms`
+            : `transform 280ms cubic-bezier(0.16,1,0.3,1) ${staggerDelay}ms, opacity 280ms ease-out ${staggerDelay}ms`,
+        }}
+      >
+        <div
+          className={cascadeDelay != null ? 'row-cascade' : undefined}
+          style={cascadeStyle}
+        >
+          <ConstellationCard
+            ref={(el) => {
+              cardRefs.current[idStr] = el;
+            }}
+            data={c}
+            hovered={idStr === hoveredId}
+            focused={idStr === openId}
+            bulkMode={bulkMode}
+            selected={selectedIds.has(idStr)}
+            onSelectChange={(v) => toggleOne(idStr, v)}
+            onHover={() => setHoveredId(idStr)}
+            onLeave={() => setHoveredId(null)}
+            onFocus={() => openCard(idStr)}
+          />
+        </div>
+      </li>
+    );
+  };
+
   const runBulkExport = useCallback(() => {
     const rows = all.filter((c) => selectedIds.has(String(c.id ?? '')));
     if (rows.length === 0) return;
@@ -391,7 +501,9 @@ export const LocationsList = () => {
             <span className="flex items-baseline gap-2 text-xs text-foreground/50">
               {listQuery.isLoading
                 ? 'Loading…'
-                : query.trim()
+                : query.trim() ||
+                    statusFilter !== 'all' ||
+                    selectedCountries.size > 0
                   ? `${filtered.length} of ${all.length}`
                   : `${all.length} site${all.length === 1 ? '' : 's'}`}
               {bulkMode && !listQuery.isLoading && filtered.length > 0 ? (
@@ -442,16 +554,8 @@ export const LocationsList = () => {
             <div style={topAnim(1)}>
               <SearchInput value={query} onChange={setQuery} />
             </div>
-            <div style={topAnim(2)}>
-              <RegionFilter
-                label={regionLabel}
-                value={regionFilter}
-                options={regionOptions}
-                onChange={setRegionFilter}
-              />
-            </div>
             <CanAccess resource={ResourceType.LOCATIONS} action={ActionType.CREATE}>
-              <div style={topAnim(3)}>
+              <div style={topAnim(2)}>
                 <Button
                   variant="default"
                   size="sm"
@@ -478,10 +582,23 @@ export const LocationsList = () => {
                 constellations={filtered}
                 hoveredId={hoveredId}
                 focusedId={openId}
-                regionFilter={regionFilter}
+                // Focus on a single country when exactly one pill
+                // is selected; empty (Caribbean-wide) otherwise so
+                // the map doesn't try to fit a two-country bbox
+                // or nothing at all.
+                regionFilter={
+                  selectedCountries.size === 1
+                    ? Array.from(selectedCountries)[0]
+                    : ''
+                }
                 onPinHover={setHoveredId}
                 onPinClick={openCard}
-                onRegionSelect={setRegionFilter}
+                // Cluster click sets a single-country selection —
+                // if the operator wasn't already in group mode,
+                // this lights up their pill for that country.
+                onRegionSelect={(country) =>
+                  setSelectedCountries(new Set([country]))
+                }
               />
             )}
           </div>
@@ -494,78 +611,135 @@ export const LocationsList = () => {
               clipped by `overflow-y: auto` and can't be scrolled with
               the underlying list. */}
           <div ref={rhsPanelRef} className="relative min-h-0">
-            <div className="h-full overflow-y-auto px-2 py-2">
-              {listQuery.isLoading ? (
-                <CardListSkeleton />
-              ) : filtered.length === 0 ? (
-                <EmptyState query={query} />
-              ) : (
-                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {filtered.map((c, i) => {
-                    const idStr = String(c.id);
-                    const isOpen = openId === idStr;
-                    const isSibling = !!openId && !isOpen;
-                    // Staggered shrink from outside-in reads as a
-                    // collapse toward the picked card rather than a
-                    // synchronized snap. Delay caps at ~140ms so long
-                    // lists don't drag.
-                    const staggerDelay = Math.min(i * 18, 140);
-                    // Two cascade modes:
-                    //   • Initial page load — 550ms base so the
-                    //     reveal comes AFTER the page title lands,
-                    //     with a 40ms per-row stagger.
-                    //   • Filter change (`rowsCascade` off) — no
-                    //     base delay, tighter 25ms stagger. Cards
-                    //     that re-mount after a filter tweak still
-                    //     get the reveal motion.
-                    const cascadeDelay = !arrived
-                      ? null
-                      : rowsCascade
-                        ? 550 + Math.min(i * 40, 480)
-                        : Math.min(i * 25, 300);
-                    const cascadeStyle: React.CSSProperties | undefined =
-                      cascadeDelay != null
-                        ? ({
-                            ['--row-cascade-delay' as string]: `${cascadeDelay}ms`,
-                          } as React.CSSProperties)
-                        : undefined;
+            <div className="h-full overflow-y-auto px-2">
+              {/* Sub-header — sort + status filter + group toggle.
+                  ALWAYS rendered so the operator can always click
+                  back out of a filter that yielded zero results.
+                  Sticky at the top of the scroll container. When
+                  `groupByCountry` is on, a second row of country
+                  pills appears below for multi-select filtering. */}
+              <div className="sticky top-0 z-10 -mx-2 mb-1 border-b border-border/30 bg-background/95 backdrop-blur-sm">
+              <div className="flex items-center gap-1 px-3 py-1.5">
+                <IconChip
+                  label={sortDir === 'asc' ? 'Sort A → Z' : 'Sort Z → A'}
+                  icon={
+                    sortDir === 'asc' ? (
+                      <ArrowDownAZ className="size-4" />
+                    ) : (
+                      <ArrowDownZA className="size-4" />
+                    )
+                  }
+                  active
+                  onClick={() =>
+                    setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+                  }
+                  tooltipSide="bottom"
+                />
+                <span className="mx-1 h-4 w-px bg-border/40" aria-hidden />
+                <IconChip
+                  label="Online only"
+                  icon={<Radio className="size-4" />}
+                  active={statusFilter === 'online'}
+                  onClick={() =>
+                    setStatusFilter((s) => (s === 'online' ? 'all' : 'online'))
+                  }
+                  tone="online"
+                  tooltipSide="bottom"
+                />
+                <IconChip
+                  label="Alerting only"
+                  icon={<TriangleAlert className="size-4" />}
+                  active={statusFilter === 'alerting'}
+                  onClick={() =>
+                    setStatusFilter((s) => (s === 'alerting' ? 'all' : 'alerting'))
+                  }
+                  tone="warning"
+                  tooltipSide="bottom"
+                />
+                <IconChip
+                  label="Offline only"
+                  icon={<Unplug className="size-4" />}
+                  active={statusFilter === 'offline'}
+                  onClick={() =>
+                    setStatusFilter((s) => (s === 'offline' ? 'all' : 'offline'))
+                  }
+                  tone="danger"
+                  tooltipSide="bottom"
+                />
+                <span className="mx-1 h-4 w-px bg-border/40" aria-hidden />
+                <IconChip
+                  label={
+                    groupByCountry ? 'Ungroup countries' : 'Group by country'
+                  }
+                  icon={<Layers className="size-4" />}
+                  active={groupByCountry}
+                  onClick={() => setGroupByCountry((v) => !v)}
+                  tooltipSide="bottom"
+                />
+              </div>
+              {groupByCountry && regionOptions.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-border/30 px-3 py-1.5">
+                  {regionOptions.map((country) => {
+                    const active = selectedCountries.has(country);
                     return (
-                      <li
-                        key={c.id ?? c.name}
-                        style={{
-                          transformOrigin: 'center',
-                          transform: isSibling ? 'scale(0)' : 'scale(1)',
-                          opacity: isSibling ? 0 : 1,
-                          visibility: isOpen && panelMounted ? 'hidden' : 'visible',
-                          transition: isSibling
-                            ? `transform 240ms cubic-bezier(0.4,0,0.2,1) ${staggerDelay}ms, opacity 240ms ease-in ${staggerDelay}ms`
-                            : `transform 280ms cubic-bezier(0.16,1,0.3,1) ${staggerDelay}ms, opacity 280ms ease-out ${staggerDelay}ms`,
-                        }}
+                      <button
+                        key={country}
+                        type="button"
+                        onClick={() => toggleCountry(country)}
+                        className={
+                          'cursor-pointer rounded-full border px-2.5 py-0.5 text-[10px] font-medium uppercase tracking-widest transition-colors ' +
+                          (active
+                            ? 'border-foreground/60 bg-foreground text-background'
+                            : 'border-border/50 bg-background text-foreground/60 hover:border-foreground/30 hover:text-foreground')
+                        }
+                        aria-pressed={active}
                       >
-                        <div
-                          className={cascadeDelay != null ? 'row-cascade' : undefined}
-                          style={cascadeStyle}
-                        >
-                          <ConstellationCard
-                            ref={(el) => {
-                              cardRefs.current[idStr] = el;
-                            }}
-                            data={c}
-                            hovered={idStr === hoveredId}
-                            focused={idStr === openId}
-                            bulkMode={bulkMode}
-                            selected={selectedIds.has(idStr)}
-                            onSelectChange={(v) => toggleOne(idStr, v)}
-                            onHover={() => setHoveredId(idStr)}
-                            onLeave={() => setHoveredId(null)}
-                            onFocus={() => openCard(idStr)}
-                          />
-                        </div>
-                      </li>
+                        {country}
+                      </button>
                     );
                   })}
-                </ul>
-              )}
+                  {selectedCountries.size > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCountries(new Set())}
+                      className="ml-1 cursor-pointer rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-widest text-foreground/40 hover:text-foreground/80"
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+              </div>
+
+              <div className="py-2">
+                {listQuery.isLoading ? (
+                  <CardListSkeleton />
+                ) : filtered.length === 0 ? (
+                  <EmptyState query={query} />
+                ) : groupByCountry ? (
+                  <div className="space-y-4">
+                    {groupByCountryList(filtered).map(([country, items], gi) => (
+                      <div key={country}>
+                        <div className="mb-1 text-[10px] font-medium uppercase tracking-widest text-foreground/50">
+                          {country}
+                          <span className="ml-2 text-foreground/40">
+                            {items.length}
+                          </span>
+                        </div>
+                        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          {items.map((c, i) =>
+                            renderCard(c, gi * 100 + i),
+                          )}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {filtered.map((c, i) => renderCard(c, i))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             {/* Takeover overlay — absolute inside RHS panel, sibling
@@ -788,57 +962,6 @@ function SearchInput({
   );
 }
 
-/// Sentinel used to represent the "all regions" reset — Radix Select
-/// values cannot be empty strings, so we swap "" ↔ ALL at the Select
-/// boundary while the outer filter state stays as "" for no-filter.
-const ALL = '__all__';
-
-/// Region / country filter pill next to the search. The label
-/// switches based on viewer role (Ensoledus admin → "Country",
-/// regular operator → "Region"); options are unique values pulled
-/// from the loaded constellations, so the dropdown grows organically
-/// as new sites are onboarded.
-///
-/// Uses shadcn's Radix Select — consistent rendering across OSes,
-/// keyboard navigation, portal-based popover that escapes overflow.
-function RegionFilter({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (v: string) => void;
-}) {
-  if (options.length === 0) return null;
-  const allLabel = `All ${pluralize(label).toLowerCase()}`;
-  return (
-    <Select
-      value={value === '' ? ALL : value}
-      onValueChange={(v) => onChange(v === ALL ? '' : v)}
-    >
-      <SelectTrigger
-        aria-label={`Filter by ${label.toLowerCase()}`}
-        className="h-auto w-auto cursor-pointer rounded-full border-border bg-background px-3 py-1.5 text-xs shadow-none focus-visible:border-foreground/30 focus-visible:ring-foreground/10"
-      >
-        <SelectValue placeholder={allLabel} />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={ALL} className="cursor-pointer text-xs">
-          {allLabel}
-        </SelectItem>
-        {options.map((opt) => (
-          <SelectItem key={opt} value={opt} className="cursor-pointer text-xs">
-            {opt}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
 /// Canonical display name for a raw country value pulled from the
 /// DB. The `country` column stores freeform strings ("JM", "Jamaica",
 /// "Trinidad And Tobago", "Trinidad & Tobago", "TT", …) — this
@@ -872,15 +995,6 @@ const COUNTRY_ALIASES: Record<string, string> = {
   'ST LUCIA': 'Saint Lucia',
   'ST. LUCIA': 'Saint Lucia',
 };
-
-/// Naive English pluralizer for the filter label. Handles the two
-/// endings that matter for the current label set (Country, Parish,
-/// Region, County): `y` → `ies`, sibilants → `es`, otherwise `s`.
-function pluralize(word: string): string {
-  if (/[^aeiou]y$/i.test(word)) return word.slice(0, -1) + 'ies';
-  if (/(s|sh|ch|x|z)$/i.test(word)) return word + 'es';
-  return word + 's';
-}
 
 /// Unique, non-empty, alphabetically sorted string values.
 /// Used to feed the region/country filter dropdown from the
@@ -979,7 +1093,7 @@ const ConstellationCard = ({
         // in that 2.5px outer band, reading as a grey ghost line.
         // Base has NO border — added only in the non-focused
         // branches so the beam owns the whole outline when active.
-        'group relative w-full cursor-pointer overflow-hidden rounded-xl bg-white p-4 text-left transition-all ' +
+        'group/tile relative w-full cursor-pointer overflow-hidden rounded-xl bg-white p-4 text-left transition-all ' +
         (focused
           ? ''
           : hovered
@@ -1030,8 +1144,8 @@ const ConstellationCard = ({
                 'status-dot-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite',
             }}
           />
-          <h3 className="truncate text-sm font-semibold">
-            {data.name || `Constellation ${data.id ?? ''}`}
+          <h3 className="min-w-0 flex-1 text-sm font-semibold">
+            <MarqueeText text={data.name || `Constellation ${data.id ?? ''}`} />
           </h3>
         </div>
         <p className="mt-1 truncate text-xs text-foreground/60">{address}</p>
@@ -1529,4 +1643,183 @@ function toCsv(rows: Constellation[]): string {
     );
   }
   return lines.join('\n');
+}
+
+// ─── Sub-header helpers ─────────────────────────────────────────────
+
+/// Classifies a constellation by the same green / amber / red
+/// dot logic the card uses:
+///   • online  — all chargers online (healthy)
+///   • alerting — some chargers online, some offline (partial)
+///   • offline — every charger down (or none registered)
+function cardHealth(c: Constellation): 'online' | 'alerting' | 'offline' {
+  const pool = c.chargingPool ?? [];
+  const total = pool.length;
+  const online = pool.filter((s) => s.isOnline).length;
+  if (total > 0 && online === total) return 'online';
+  if (online > 0 && online < total) return 'alerting';
+  return 'offline';
+}
+
+/// Groups a filtered set by canonical country name and returns
+/// an alphabetically-sorted list of `[country, items]` tuples.
+/// The items within each group keep their pre-existing sort order
+/// (whatever the parent memo produced).
+function groupByCountryList(list: Constellation[]): Array<[string, Constellation[]]> {
+  const groups = new Map<string, Constellation[]>();
+  for (const c of list) {
+    const key = canonicalCountry(String(c.country ?? '')) || 'Unknown';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(c);
+  }
+  return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b));
+}
+
+/// Small square icon button with a tooltip on hover. Active state
+/// fills the background subtly + tints the icon in a role-specific
+/// color when a `tone` is provided (online → mint, warning →
+/// amber, danger → red). Neutral tone for the sort + group
+/// toggles.
+function IconChip({
+  label,
+  icon,
+  active,
+  onClick,
+  tone = 'neutral',
+  tooltipSide = 'top',
+}: {
+  label: string;
+  icon: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+  tone?: 'neutral' | 'online' | 'warning' | 'danger';
+  tooltipSide?: 'top' | 'right' | 'bottom' | 'left';
+}) {
+  const activeClass =
+    tone === 'online'
+      ? 'bg-[#4a9d6c]/12 text-[#4a9d6c]'
+      : tone === 'warning'
+        ? 'bg-[#c99039]/12 text-[#c99039]'
+        : tone === 'danger'
+          ? 'bg-[#c94a3a]/12 text-[#c94a3a]'
+          : 'bg-foreground/10 text-foreground';
+  const restClass = 'text-foreground/50 hover:bg-foreground/5 hover:text-foreground';
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={label}
+          aria-pressed={active}
+          className={
+            'flex size-7 cursor-pointer items-center justify-center rounded-md transition-colors ' +
+            (active ? activeClass : restClass)
+          }
+        >
+          {icon}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side={tooltipSide} sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+// ─── Marquee text ───────────────────────────────────────────────────
+
+/// Single-line label that at rest clips its content with a soft
+/// right-edge fade (indicating "more to come"), and on the parent
+/// tile's hover slides the full string leftward so the reader can
+/// scan the whole thing. Driven purely by CSS `:hover` on the
+/// nearest `group/tile` ancestor — no JS event listeners on the
+/// ticker itself, so it survives cloning wrappers (Radix Slot,
+/// etc.) and can't misfire between renders.
+///
+/// Overflow amount is measured via `ResizeObserver` and pushed into
+/// a CSS custom property (`--marquee-shift`) which the hover state
+/// consumes as the translate distance. Duration scales with the
+/// distance so short overflows read fast and long ones stay
+/// legible. If the text fits, everything short-circuits — no
+/// mask, no animation.
+function MarqueeText({ text, className }: { text: string; className?: string }) {
+  const outerRef = useRef<HTMLSpanElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
+  const [metrics, setMetrics] = useState<{ overflow: number; textWidth: number }>(
+    { overflow: 0, textWidth: 0 },
+  );
+
+  useLayoutEffect(() => {
+    if (!outerRef.current || !measureRef.current) return;
+    const outer = outerRef.current;
+    const measure = () => {
+      const outerW = outer.clientWidth;
+      const textW = measureRef.current?.scrollWidth ?? 0;
+      // 4px slack so a barely-fitting string doesn't jitter into
+      // marquee mode on subpixel measurement noise.
+      setMetrics({
+        overflow: Math.max(0, textW - outerW - 4),
+        textWidth: textW,
+      });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(outer);
+    return () => ro.disconnect();
+  }, [text]);
+
+  const canMarquee = metrics.overflow > 0;
+  // Stop when the last character sits ~10px INSIDE the crisp
+  // zone (i.e. 10px left of where the 20px fade would start), so
+  // the trailing text lands fully readable instead of running off
+  // to the left. Extra 30px = 20px fade-zone clearance + 10px
+  // breathing room.
+  const shiftPx = metrics.overflow + 30;
+  // ~30px per second — reads without dragging. Minimum 1.5s so
+  // short overflows don't blink past.
+  const durationMs = Math.max(1500, Math.round(shiftPx * 30));
+
+  return (
+    <span
+      ref={outerRef}
+      className={
+        'relative block overflow-hidden whitespace-nowrap ' +
+        (canMarquee ? 'marquee-outer ' : '') +
+        (className ?? '')
+      }
+      style={
+        canMarquee
+          ? ({
+              ['--marquee-shift' as string]: `-${shiftPx}px`,
+              ['--marquee-duration' as string]: `${durationMs}ms`,
+            } as React.CSSProperties)
+          : undefined
+      }
+    >
+      {/* Hidden measurer — reveals the unclipped natural width so
+          the metrics calc is accurate regardless of visible layout. */}
+      <span
+        ref={measureRef}
+        aria-hidden
+        className="pointer-events-none invisible absolute left-0 top-0 inline-block whitespace-nowrap"
+      >
+        {text}
+      </span>
+      {/* Visible text. Slides on tile hover via the group's :hover
+          state — no JS handlers involved. Base transition (200ms
+          ease-out) handles the snap-back on leave; on hover the
+          duration extends to the measured slide time and easing
+          switches to linear for a steady scroll. */}
+      <span
+        className={
+          canMarquee
+            ? 'inline-block transition-transform duration-200 ease-out group-hover/tile:[transition-duration:var(--marquee-duration)] group-hover/tile:[transition-timing-function:linear] group-hover/tile:[transform:translateX(var(--marquee-shift))]'
+            : 'block truncate'
+        }
+      >
+        {text}
+      </span>
+    </span>
+  );
 }

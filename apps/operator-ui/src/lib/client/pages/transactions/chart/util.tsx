@@ -2,17 +2,21 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-import { type ImplicitLabelType } from 'recharts/types/component/Label';
-
+/// Shape passed to every meter-value chart: `elapsedTime` in seconds
+/// (x-axis) plus a numeric measurement keyed by its unit name.
 export type ChartData = {
   elapsedTime: number;
   [unit: string]: number | string;
 }[];
 
+/// Picks a sensible x-axis tick interval based on the transaction's
+/// total elapsed time — 5s ticks for very short sessions all the
+/// way up to hourly ticks for multi-hour ones. Feeds Recharts's
+/// `ticks` prop directly.
 export const generateTimeTicks = (chartData: ChartData) => {
   if (!chartData || chartData.length === 0) return [0];
 
-  const totalSeconds = chartData[chartData.length - 1].elapsedTime;
+  const totalSeconds = chartData[chartData.length - 1].elapsedTime as number;
 
   let interval = 0;
   if (totalSeconds < 30)
@@ -37,6 +41,8 @@ export const generateTimeTicks = (chartData: ChartData) => {
   return ticks;
 };
 
+/// Human-readable duration formatter — "12s", "5m", "1h 23m".
+/// Used for x-axis tick labels + tooltip timestamps.
 export const formatTimeLabel = (seconds: number) => {
   if (seconds < 60) {
     return `${seconds}s`;
@@ -50,18 +56,3 @@ export const formatTimeLabel = (seconds: number) => {
     return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
   }
 };
-
-export const chartSize = 'min-w-[50px] min-h-[100px]';
-export const chartMargin = { bottom: 25 };
-
-export const getXAxisLabelConfig = (label: string): ImplicitLabelType => ({
-  value: label,
-  position: 'insideBottom',
-  offset: -20,
-});
-export const getYAxisLabelConfig = (label: string): ImplicitLabelType => ({
-  value: label,
-  angle: -90,
-  position: 'insideLeft',
-  style: { textAnchor: 'middle' },
-});

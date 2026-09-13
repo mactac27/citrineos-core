@@ -563,6 +563,11 @@ export enum MeasurandEnumType {
   Power_Reactive_Export = 'Power.Reactive.Export',
   Power_Reactive_Import = 'Power.Reactive.Import',
   SoC = 'SoC',
+  // vSparQ extension — OCPP 2.0.1 spec includes Temperature as a
+  // valid measurand, but the CitrineOS base enum omitted it.
+  // Added so charger/battery thermal telemetry can be plotted
+  // alongside the other electrical measurands.
+  Temperature = 'Temperature',
   Voltage = 'Voltage',
 }
 

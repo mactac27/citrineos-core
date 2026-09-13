@@ -52,7 +52,10 @@
       "noPowerData": "No Power data available",
       "currentLabel": "Current (A)",
       "currentTitle": "Current Over Time",
-      "noCurrentData": "No Current data available"
+      "noCurrentData": "No Current data available",
+      "temperatureLabel": "Temperature (°C)",
+      "temperatureTitle": "Temperature Over Time",
+      "noTemperatureData": "No Temperature data available"
     },
     "events": {
       "eventType": "Event Type",

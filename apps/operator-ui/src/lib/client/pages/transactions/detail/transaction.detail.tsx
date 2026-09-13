@@ -19,9 +19,16 @@ import React from 'react';
 
 type TransactionDetailProps = {
   params: { id: string };
+  /// 'page' (default) renders inside a full page shell with margins
+  /// and each section wrapped in a `<Card>`. 'modal' strips those:
+  /// no page margins, transparent card backgrounds (see the CSS
+  /// scoped by `data-detail-mode="modal"` in globals.css), and the
+  /// underlying `TransactionDetailCard` skips its own header row
+  /// (which the modal chrome supplies instead).
+  mode?: 'page' | 'modal';
 };
 
-export const TransactionDetail = ({ params }: TransactionDetailProps) => {
+export const TransactionDetail = ({ params, mode = 'page' }: TransactionDetailProps) => {
   const { id } = params;
   const translate = useTranslate();
 
@@ -35,16 +42,23 @@ export const TransactionDetail = ({ params }: TransactionDetailProps) => {
   });
   const transaction = transactionData?.data;
 
+  // Modal mode drops the page-level margin/flex utilities and adds
+  // a `data-detail-mode` attribute so scoped CSS in globals.css can
+  // strip the white Card chrome (background, border, shadow) that
+  // reads as nested tiles inside the modal.
+  const wrapperClass =
+    mode === 'modal' ? 'flex flex-col gap-4 px-6 py-4' : `${pageMargin} ${pageFlex}`;
+
   if (isLoading) {
     return (
-      <div className={`${pageMargin} ${pageFlex}`}>
+      <div className={wrapperClass} data-detail-mode={mode}>
         <Skeleton className="h-50 w-full" />
         <Skeleton className="h-60 w-full" />
       </div>
     );
   } else if (!transaction) {
     return (
-      <div className={`${pageMargin} ${pageFlex}`}>
+      <div className={wrapperClass} data-detail-mode={mode}>
         <NoDataFoundCard message={translate('Transactions.noDataFound', { id })} />
       </div>
     );
@@ -56,13 +70,13 @@ export const TransactionDetail = ({ params }: TransactionDetailProps) => {
       action={ActionType.SHOW}
       params={{ id: transaction.id }}
       fallback={
-        <div className={`${pageMargin} ${pageFlex}`}>
+        <div className={wrapperClass} data-detail-mode={mode}>
           <AccessDeniedFallbackCard />
         </div>
       }
     >
-      <div className={`${pageMargin} ${pageFlex}`}>
-        <TransactionDetailCard transaction={transaction} />
+      <div className={wrapperClass} data-detail-mode={mode}>
+        <TransactionDetailCard transaction={transaction} mode={mode} />
         <TransactionDetailTabsCard transaction={transaction} />
       </div>
     </CanAccess>

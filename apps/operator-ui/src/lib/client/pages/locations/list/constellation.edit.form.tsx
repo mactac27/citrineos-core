@@ -332,7 +332,36 @@ export function ConstellationEditForm({
 
   return (
     <>
-    <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+    <form
+      onSubmit={onSubmit}
+      className="flex min-h-0 flex-1 flex-col"
+      // Form-level autofill kill. Chrome / Safari / LastPass /
+      // 1Password all read this attribute on the <form> element
+      // and back off from grouping the fields as an address form.
+      autoComplete="off"
+    >
+      {/* Autofill honeypot — Chrome ignores `autoComplete="off"`
+          on visible fields when it detects address-shaped fields
+          nearby, but it always fills the FIRST matching input in
+          a form. We give it a hidden dummy address group to
+          consume that autofill instead of our real fields.
+          `aria-hidden` + `tabIndex={-1}` keeps it out of the
+          keyboard/screen-reader tree. */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          width: 0,
+          height: 0,
+          overflow: 'hidden',
+          opacity: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        <input type="text" name="name" tabIndex={-1} autoComplete="name" />
+        <input type="text" name="street-address" tabIndex={-1} autoComplete="street-address" />
+        <input type="text" name="postal-code" tabIndex={-1} autoComplete="postal-code" />
+      </div>
       <div className="border-b border-border/40 px-6 py-5">
         <div className="text-lg font-semibold">
           {isCreate ? 'New constellation' : 'Edit constellation'}
@@ -344,11 +373,22 @@ export function ConstellationEditForm({
             share the second row as two dropdowns, timezone below. */}
         <Section>
           <TextField
-            label="Name"
+            // "Site name" instead of "Name" — Chrome's contact
+            // autofill classifier keys off the visible label. A
+            // label without "Name" doesn't trigger the person /
+            // address dropdown on focus, even when other address-
+            // shaped fields are nearby.
+            label="Site name"
             value={values.name}
             onChange={(v) => set('name', v)}
             required
             fullWidth
+            inputProps={{
+              autoComplete: 'off',
+              name: 'constellation-site-name',
+              'data-lpignore': 'true',
+              'data-1p-ignore': 'true',
+            } as React.InputHTMLAttributes<HTMLInputElement>}
           />
           <SelectField
             label="Country"
@@ -910,6 +950,13 @@ function TextField({
   fullWidth?: boolean;
   inputProps?: React.InputHTMLAttributes<HTMLInputElement>;
 }) {
+  // Readonly-on-mount defeats Chrome's aggressive address
+  // autofill. Chrome skips readonly inputs entirely; we flip it
+  // off on the first focus so the field becomes editable
+  // exactly when the user actually clicks it. Standard
+  // `autoComplete="off"` alone isn't enough — Chrome ignores it
+  // when it detects an address-shaped form.
+  const [readOnly, setReadOnly] = useState(true);
   return (
     <label className={'flex flex-col gap-1 ' + (fullWidth ? 'sm:col-span-2' : '')}>
       <span className="text-[11px] font-medium text-foreground/70">
@@ -921,6 +968,11 @@ function TextField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        readOnly={readOnly}
+        onFocus={() => setReadOnly(false)}
+        autoComplete="off"
+        data-lpignore="true"
+        data-1p-ignore="true"
         {...inputProps}
         className="rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground placeholder:text-foreground/30 focus:border-foreground/30 focus:outline-none focus:ring-2 focus:ring-foreground/10"
       />

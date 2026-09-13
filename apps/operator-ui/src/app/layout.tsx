@@ -13,40 +13,41 @@ import React from 'react';
 import './globals.css';
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
 
-const roobertFont = localFont({
+// Satoshi replaces Roobert as the primary sans. Satoshi ships
+// Light / Regular / Medium / Bold / Black — no dedicated
+// SemiBold (600). Browsers will resolve `font-weight: 600`
+// requests to the nearest available weight (700 Bold) via the
+// standard font-matching algorithm, which is acceptable given
+// how sparingly 600 is used in the codebase.
+const satoshiFont = localFont({
   src: [
     {
-      path: './_fonts/Roobert-Light.woff2',
+      path: './_fonts/Satoshi-Light.otf',
       weight: '300',
       style: 'normal',
     },
     {
-      path: './_fonts/Roobert-Regular.woff2',
+      path: './_fonts/Satoshi-Regular.otf',
       weight: '400',
       style: 'normal',
     },
     {
-      path: './_fonts/Roobert-Medium.woff2',
+      path: './_fonts/Satoshi-Medium.otf',
       weight: '500',
       style: 'normal',
     },
     {
-      path: './_fonts/Roobert-SemiBold.woff2',
-      weight: '600',
-      style: 'normal',
-    },
-    {
-      path: './_fonts/Roobert-Bold.woff2',
+      path: './_fonts/Satoshi-Bold.otf',
       weight: '700',
       style: 'normal',
     },
     {
-      path: './_fonts/Roobert-Heavy.woff2',
-      weight: '800',
+      path: './_fonts/Satoshi-Black.otf',
+      weight: '900',
       style: 'normal',
     },
   ],
-  variable: '--font-roobert',
+  variable: '--font-satoshi',
 });
 
 export const metadata: Metadata = {
@@ -72,7 +73,7 @@ export default async function RootLayout({
   const fallbackMessages = await getMessages({ locale: fallbackLocale });
 
   return (
-    <html lang={locale} className={roobertFont.variable} suppressHydrationWarning>
+    <html lang={locale} className={satoshiFont.variable} suppressHydrationWarning>
       {/*
        * `suppressHydrationWarning` also on <body> — Grammarly (and
        * some other browser extensions) inject data-* attributes onto

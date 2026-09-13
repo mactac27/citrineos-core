@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 'use client';
 
-import { Loader } from '@lib/client/components/ui/loader';
+import { Skeleton } from '@lib/client/components/ui/skeleton';
 import {
   TableBody,
   TableCell,
@@ -51,7 +51,7 @@ import {
 } from './fields';
 import { CheckAll } from './fields/checkall';
 import { Pagination } from './fields/pagination';
-import { SortAction } from './fields/sort';
+import { SortableHeader } from './fields/sort';
 import { DataTableToolbar } from './toolbar';
 import { tableHeaderRowStyle, tableHeaderTextStyle } from '@lib/client/styles/table';
 import { parseAsJson, useQueryState } from 'nuqs';
@@ -276,17 +276,26 @@ export function Table<
                 <TableRow key={headerGroup.id}>
                   {headerGroup.headers.map((header: any) => {
                     const columnDef = header.column.columnDef as CustomColumnDef<TData, TError>;
+                    const isSortable =
+                      !useClientData &&
+                      tableOptions.enableSorting &&
+                      columnDef.enableSorting;
+                    const headerLabel = header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext());
                     return (
                       <TableHead key={header.id}>
                         <div className={tableHeaderTextStyle}>
-                          {header.isPlaceholder
-                            ? null
-                            : flexRender(header.column.columnDef.header, header.getContext())}
-                          {!useClientData &&
-                            tableOptions.enableSorting &&
-                            columnDef.enableSorting && (
-                              <SortAction column={header.column} tableStateKey={tableStateKey} />
-                            )}
+                          {isSortable ? (
+                            <SortableHeader
+                              column={header.column}
+                              tableStateKey={tableStateKey}
+                            >
+                              {headerLabel}
+                            </SortableHeader>
+                          ) : (
+                            headerLabel
+                          )}
                           {isFilterable &&
                             columnDef?.filter &&
                             (columnDef.filter({
@@ -303,13 +312,36 @@ export function Table<
           )}
           <TableBody>
             {tableQuery.isLoading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center text-nowrap">
-                  <div className="flex items-center justify-center flex-row">
-                    <Loader className="h-4 text-primary" />
-                  </div>
-                </TableCell>
-              </TableRow>
+              // Skeleton rows with one cell per column so the
+              // browser has real column structure from the very
+              // first render. Skeleton widths are character-based
+              // (ch) rather than % so each cell has an intrinsic
+              // width the browser can use to compute column widths.
+              // Percent widths depend on the parent cell's width,
+              // which is itself computed from content — during load
+              // there IS no content, so percent hints resolve to
+              // "divide evenly" and the layout jumps when real
+              // varying-length content arrives.
+              Array.from({ length: 5 }, (_, rowIdx) => (
+                <TableRow key={`loading-${rowIdx}`} aria-hidden>
+                  {reactTable.getVisibleFlatColumns().map((col, colIdx) => (
+                    <TableCell key={col.id} className="text-nowrap">
+                      <Skeleton
+                        className="h-3"
+                        style={{
+                          // Deterministic per-column width in `ch`
+                          // units so the browser lays real column
+                          // widths from first paint. 12–24ch spans
+                          // the typical range (short codes → long
+                          // UUIDs). Staggered per row so adjacent
+                          // rows don't look uniform.
+                          width: `${12 + ((colIdx * 5 + rowIdx * 3) % 12)}ch`,
+                        }}
+                      />
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
             ) : reactTable.getRowModel().rows?.length ? (
               reactTable.getRowModel().rows.map((row: any, index: number) => (
                 <React.Fragment key={row.id}>
@@ -342,7 +374,9 @@ export function Table<
             )}
           </TableBody>
         </TableUi>
-        {!useClientData && <Pagination table={reactTable} tableStateKey={tableStateKey} />}
+        {!useClientData && !tableQuery.isLoading && (
+          <Pagination table={reactTable} tableStateKey={tableStateKey} />
+        )}
       </div>
     </DeleteProvider>
   );

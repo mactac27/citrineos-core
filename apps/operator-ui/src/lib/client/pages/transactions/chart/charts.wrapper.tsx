@@ -10,6 +10,7 @@ import { EnergyOverTime } from '@lib/client/pages/transactions/chart/energy.over
 import { StateOfCharge } from '@lib/client/pages/transactions/chart/state.of.charge';
 import { VoltageOverTime } from '@lib/client/pages/transactions/chart/voltage.over.time';
 import { CurrentOverTime } from '@lib/client/pages/transactions/chart/current.over.time';
+import { TemperatureOverTime } from '@lib/client/pages/transactions/chart/temperature.over.time';
 
 export const ChartsWrapper = ({
   meterValues,
@@ -19,12 +20,13 @@ export const ChartsWrapper = ({
   validContexts: OCPP2_0_1.ReadingContextEnumType[];
 }) => {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <PowerOverTime meterValues={meterValues} validContexts={validContexts} />
       <EnergyOverTime meterValues={meterValues} validContexts={validContexts} />
       <StateOfCharge meterValues={meterValues} validContexts={validContexts} />
       <VoltageOverTime meterValues={meterValues} validContexts={validContexts} />
       <CurrentOverTime meterValues={meterValues} validContexts={validContexts} />
+      <TemperatureOverTime meterValues={meterValues} validContexts={validContexts} />
     </div>
   );
 };

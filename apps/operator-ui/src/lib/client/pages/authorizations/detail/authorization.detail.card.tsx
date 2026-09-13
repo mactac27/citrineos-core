@@ -22,10 +22,15 @@ import { NOT_APPLICABLE } from '@lib/utils/consts';
 
 export interface AuthorizationDetailCardProps {
   authorization: AuthorizationDto;
+  /// 'modal' hides the internal header row (chevron/title/edit/delete)
+  /// — that chrome moves to the modal wrapper. Default 'page'
+  /// preserves the original standalone-page layout.
+  mode?: 'page' | 'modal';
 }
 
 export const AuthorizationDetailCard: React.FC<AuthorizationDetailCardProps> = ({
   authorization,
+  mode = 'page',
 }) => {
   const { back, push } = useRouter();
   const { mutate } = useDelete();
@@ -52,44 +57,46 @@ export const AuthorizationDetailCard: React.FC<AuthorizationDetailCardProps> = (
 
   return (
     <Card>
-      <CardHeader>
-        <div className={cardHeaderFlex}>
-          <ChevronLeft
-            onClick={() => {
-              if (window.history.state?.idx === 0) push(`/${MenuSection.AUTHORIZATIONS}`);
-              else back();
-            }}
-            className="cursor-pointer"
-          />
-          <h2 className={heading2Style}>
-            {translate('Authorizations.authorization')} {authorization.id}
-          </h2>
-          <CanAccess
-            resource={ResourceType.AUTHORIZATIONS}
-            action={ActionType.EDIT}
-            params={{ id: authorization.id }}
-          >
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => push(`/${MenuSection.AUTHORIZATIONS}/${authorization.id}/edit`)}
+      {mode === 'page' ? (
+        <CardHeader>
+          <div className={cardHeaderFlex}>
+            <ChevronLeft
+              onClick={() => {
+                if (window.history.state?.idx === 0) push(`/${MenuSection.AUTHORIZATIONS}`);
+                else back();
+              }}
+              className="cursor-pointer"
+            />
+            <h2 className={heading2Style}>
+              {translate('Authorizations.authorization')} {authorization.id}
+            </h2>
+            <CanAccess
+              resource={ResourceType.AUTHORIZATIONS}
+              action={ActionType.EDIT}
+              params={{ id: authorization.id }}
             >
-              <Edit className={buttonIconSize} />
-              {translate('buttons.edit')}
-            </Button>
-          </CanAccess>
-          <CanAccess
-            resource={ResourceType.AUTHORIZATIONS}
-            action={ActionType.DELETE}
-            params={{ id: authorization.id }}
-          >
-            <Button variant="destructive" size="sm" onClick={handleDeleteClick}>
-              <Trash2 className={buttonIconSize} />
-              {translate('buttons.delete')}
-            </Button>
-          </CanAccess>
-        </div>
-      </CardHeader>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => push(`/${MenuSection.AUTHORIZATIONS}/${authorization.id}/edit`)}
+              >
+                <Edit className={buttonIconSize} />
+                {translate('buttons.edit')}
+              </Button>
+            </CanAccess>
+            <CanAccess
+              resource={ResourceType.AUTHORIZATIONS}
+              action={ActionType.DELETE}
+              params={{ id: authorization.id }}
+            >
+              <Button variant="destructive" size="sm" onClick={handleDeleteClick}>
+                <Trash2 className={buttonIconSize} />
+                {translate('buttons.delete')}
+              </Button>
+            </CanAccess>
+          </div>
+        </CardHeader>
+      ) : null}
       <CardContent>
         <div className={cardGridStyle}>
           <KeyValueDisplay

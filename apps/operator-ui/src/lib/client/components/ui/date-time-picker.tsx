@@ -13,15 +13,23 @@ export const DateTimePicker = ({
   date,
   onSelectDateAction,
   placeholder = 'Pick a date and time',
+  triggerClassName,
 }: CalendarWithTimeProps & {
   placeholder?: string;
+  /// Full replacement for the trigger's className. Pass to change
+  /// shape (pill vs rectangle), sizing, or typography for a
+  /// specific instance. When omitted the default rectangular
+  /// trigger is used so existing consumers stay unchanged.
+  triggerClassName?: string;
 }) => {
+  const defaultTriggerClassName =
+    'cursor-pointer data-[empty=true]:text-muted-foreground flex items-center justify-between text-sm px-3 py-1 text-sm shadow-sm font-normal h-9 w-full rounded-md border border-input bg-transparent';
   return (
     <Popover>
       <PopoverTrigger asChild>
         <div
           data-empty={!date}
-          className="cursor-default data-[empty=true]:text-muted-foreground flex items-center justify-between text-sm px-3 py-1 text-sm shadow-sm font-normal h-9 w-full rounded-md border border-input bg-transparent"
+          className={triggerClassName ?? defaultTriggerClassName}
         >
           <div className="flex items-center gap-1">
             <CalendarIcon className={buttonIconSize} />

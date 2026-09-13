@@ -4,6 +4,30 @@
 
 import { gql } from 'graphql-tag';
 
+/// Minimal picker query — id + idToken + idTokenType only. Used by
+/// the group-authorization picker inside the edit modal where we
+/// only need enough to render a searchable dropdown. Skips the
+/// heavier Transactions subselect the main list query pulls.
+export const AUTHORIZATIONS_PICKER_QUERY = gql`
+  query AuthorizationsPicker(
+    $offset: Int!
+    $limit: Int!
+    $order_by: [Authorizations_order_by!]
+    $where: Authorizations_bool_exp
+  ) {
+    Authorizations(offset: $offset, limit: $limit, order_by: $order_by, where: $where) {
+      id
+      idToken
+      idTokenType
+    }
+    Authorizations_aggregate(where: $where) {
+      aggregate {
+        count
+      }
+    }
+  }
+`;
+
 export const AUTHORIZATIONS_LIST_QUERY = gql`
   query AuthorizationsList(
     $offset: Int!
@@ -30,6 +54,15 @@ export const AUTHORIZATIONS_LIST_QUERY = gql`
       realTimeAuthUrl
       createdAt
       updatedAt
+      # Most recent transaction under this authorization — drives
+      # the "Last used" column on the list. Hasura's default array
+      # relationship from Authorizations to Transactions via the
+      # authorizationId foreign key surfaces as Transactions.
+      Transactions(limit: 1, order_by: { startTime: desc_nulls_last }) {
+        id
+        startTime
+        isActive
+      }
     }
     Authorizations_aggregate(where: $where) {
       aggregate {

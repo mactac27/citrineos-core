@@ -52,6 +52,7 @@ import {
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ChargerCreateModal } from '@lib/client/pages/charging-stations/list/charger.create.modal';
 import { CommandsUnavailableText } from '@lib/client/pages/charging-stations/commands.unavailable.text';
 import type { ChargingStationDto } from '@citrineos/base';
 import { useDispatch } from 'react-redux';
@@ -95,6 +96,9 @@ export const ChargingStationsList = () => {
   const [query, setQuery] = useState('');
   const [bulkMode, setBulkMode] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Create-charger modal — the "+ New charger" button opens this
+  // instead of routing to /charging-stations/new.
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Filter state — one per chip. Empty string / 'all' / 'any' all
   // read as "no filter" for readability at the call site.
@@ -450,10 +454,10 @@ export const ChargingStationsList = () => {
                 <Button
                   variant="default"
                   size="sm"
-                  onClick={() => push(`/${MenuSection.CHARGING_STATIONS}/new`)}
-                  className="cursor-pointer gap-1.5 bg-foreground text-background hover:bg-foreground/90"
+                  onClick={() => setCreateOpen(true)}
+                  className="cursor-pointer gap-1.5 bg-foreground text-[10px] font-medium uppercase tracking-widest text-background hover:bg-foreground/90"
                 >
-                  <Plus className="size-4" />
+                  <Plus className="size-3.5" />
                   New charger
                 </Button>
               </div>
@@ -594,6 +598,8 @@ export const ChargingStationsList = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ChargerCreateModal open={createOpen} onOpenChange={setCreateOpen} />
     </CanAccess>
   );
 };

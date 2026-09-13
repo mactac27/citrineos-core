@@ -25,9 +25,16 @@ import { TimestampDisplay } from '@lib/client/components/timestamp-display';
 
 export interface TransactionDetailCardProps {
   transaction: TransactionDto;
+  /// 'modal' hides the internal header row (chevron/title/badge/
+  /// refresh) — that chrome moves to the modal wrapper. Default
+  /// 'page' preserves the original standalone-page layout.
+  mode?: 'page' | 'modal';
 }
 
-export const TransactionDetailCard = ({ transaction }: TransactionDetailCardProps) => {
+export const TransactionDetailCard = ({
+  transaction,
+  mode = 'page',
+}: TransactionDetailCardProps) => {
   const { back, push } = useRouter();
   const dispatch = useDispatch();
   const translate = useTranslate();
@@ -45,44 +52,44 @@ export const TransactionDetailCard = ({ transaction }: TransactionDetailCardProp
     );
   }, [dispatch, transaction, translate]);
 
-  console.log(transaction);
-
   return (
     <Card>
-      <CardHeader>
-        <div className={cardHeaderFlex}>
-          <ChevronLeft
-            onClick={() => {
-              if (window.history.state?.idx === 0) {
-                push(`/${MenuSection.TRANSACTIONS}`);
-              } else {
-                back();
-              }
-            }}
-            className="cursor-pointer"
-          />
-          <h2 className={heading2Style}>
-            {translate('Transactions.transaction')} {transaction.transactionId}
-          </h2>
-          <Badge variant={transaction.isActive ? 'success' : 'destructive'}>
-            {transaction.isActive ? translate('Common.active') : translate('Common.inactive')}
-          </Badge>
-          <CanAccess
-            resource={ResourceType.TRANSACTIONS}
-            action={ActionType.EDIT}
-            params={{ id: transaction.id }}
-          >
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={showToggleActiveModal}
-              title={translate('Transactions.toggleActiveStatus', 'Toggle Active Status')}
+      {mode === 'page' ? (
+        <CardHeader>
+          <div className={cardHeaderFlex}>
+            <ChevronLeft
+              onClick={() => {
+                if (window.history.state?.idx === 0) {
+                  push(`/${MenuSection.TRANSACTIONS}`);
+                } else {
+                  back();
+                }
+              }}
+              className="cursor-pointer"
+            />
+            <h2 className={heading2Style}>
+              {translate('Transactions.transaction')} {transaction.transactionId}
+            </h2>
+            <Badge variant={transaction.isActive ? 'success' : 'destructive'}>
+              {transaction.isActive ? translate('Common.active') : translate('Common.inactive')}
+            </Badge>
+            <CanAccess
+              resource={ResourceType.TRANSACTIONS}
+              action={ActionType.EDIT}
+              params={{ id: transaction.id }}
             >
-              <RefreshCw className={buttonIconSize} />
-            </Button>
-          </CanAccess>
-        </div>
-      </CardHeader>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={showToggleActiveModal}
+                title={translate('Transactions.toggleActiveStatus', 'Toggle Active Status')}
+              >
+                <RefreshCw className={buttonIconSize} />
+              </Button>
+            </CanAccess>
+          </div>
+        </CardHeader>
+      ) : null}
       <CardContent>
         <div className={cardGridStyle}>
           <KeyValueDisplay

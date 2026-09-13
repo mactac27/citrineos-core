@@ -55,6 +55,7 @@
         "Power.Reactive.Export",
         "Power.Reactive.Import",
         "SoC",
+        "Temperature",
         "Voltage"
       ],
       "tsEnumNames": [
@@ -82,6 +83,7 @@
         "Power_Reactive_Export",
         "Power_Reactive_Import",
         "SoC",
+        "Temperature",
         "Voltage"
       ]
     },

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 'use client';
 
-import { Button } from '@lib/client/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -13,12 +12,7 @@ import {
 } from '@lib/client/components/ui/select';
 import { type BaseRecord, useTranslate } from '@refinedev/core';
 import { type UseTableReturnType } from '@refinedev/react-table';
-import {
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsLeftIcon,
-  ChevronsRightIcon,
-} from 'lucide-react';
+import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { parseAsJson, useQueryState } from 'nuqs';
 import { TableQueryStateSchema } from '@lib/client/components/table/fields/table-query-state';
 import { useDispatch, useSelector } from 'react-redux';
@@ -35,6 +29,16 @@ interface DataTablePaginationProps<TData extends BaseRecord = BaseRecord> {
 
 const MAX_PAGE_SIZE = 50;
 
+/// Table pagination footer — platform style. Matches the Chargers /
+/// Constellations pages: small-caps "Rows" label with a compact
+/// selector on the left; a tabular-nums range + prev/next icon
+/// buttons + "N / M" indicator on the right. Optional
+/// selected-count sits inline between the two clusters when
+/// `showSelectedText` is on.
+///
+/// Wraps tanstack-react-table's built-in pagination state and
+/// syncs page + size to URL params via `nuqs` so the URL is the
+/// source of truth for deep-linking.
 export const Pagination = <TData extends BaseRecord = BaseRecord>({
   table,
   showSelectedText,
@@ -49,7 +53,6 @@ export const Pagination = <TData extends BaseRecord = BaseRecord>({
   const pageSizePreference = useSelector((state) => getPageSizePreference(state, tableStateKey));
 
   const setPage = (pageIndex: number) => {
-    // store both page and size in query params for context
     setTableQueryState({
       ...(tableQueryState ?? {}),
       page: pageIndex + 1,
@@ -59,94 +62,88 @@ export const Pagination = <TData extends BaseRecord = BaseRecord>({
 
   const setPageSize = (pageSizeString: string) => {
     const pageSize = Number(pageSizeString);
-
     dispatch(
       setPageSizePreference({
         resource: tableStateKey,
         pageSize,
       }),
     );
-
-    // reset page-related query params after change
     const newParams = { ...(tableQueryState ?? {}) };
     delete newParams.page;
     delete newParams.size;
-
     setTableQueryState(Object.keys(newParams).length > 0 ? newParams : null).then();
   };
 
+  const pageSize = Math.min(
+    tableQueryState?.size ?? pageSizePreference,
+    MAX_PAGE_SIZE,
+  );
+  const currentPage = table.getState().pagination.pageIndex + 1;
+  const pageCount = Math.max(1, table.getPageCount());
+  const totalRows = table.getFilteredRowModel().rows.length;
+  const rangeStart = totalRows === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const rangeEnd = Math.min(currentPage * pageSize, totalRows);
+  const atFirst = !table.getCanPreviousPage();
+  const atLast = !table.getCanNextPage();
+
   return (
-    <div className="flex flex-col sm:flex-row gap-y-4 sm-gap-y-0 items-center justify-between">
-      {showSelectedText && (
-        <div className="flex-1 text-sm text-muted-foreground">
+    <div className="flex items-center justify-between gap-4 border-t border-border/40 px-4 py-2 text-xs">
+      <div className="flex items-center gap-2 text-foreground/60">
+        <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/50">
+          {translate('pagination.rowsPerPage', 'Rows')}
+        </span>
+        <Select value={String(pageSize)} onValueChange={setPageSize}>
+          <SelectTrigger
+            aria-label={translate('pagination.rowsPerPage', 'Rows per page')}
+            className="h-auto w-auto cursor-pointer rounded-md border-border bg-background px-2 py-1 text-xs shadow-none focus-visible:border-foreground/30 focus-visible:ring-foreground/10"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[10, 20, 30, 40, MAX_PAGE_SIZE].map((size) => (
+              <SelectItem key={size} value={String(size)} className="cursor-pointer text-xs">
+                {size}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      {showSelectedText ? (
+        <div className="hidden text-xs tabular-nums text-foreground/50 sm:block">
           {translate('Common.rowsSelected', {
             selected: table.getFilteredSelectedRowModel().rows.length,
-            total: table.getFilteredRowModel().rows.length,
+            total: totalRows,
           })}
         </div>
-      )}
-      <div className="flex relative flex-col-reverse gap-y-4 sm:gap-y-0 sm:flex-row items-center space-x-6 lg:space-x-8">
-        <div className="flex items-center space-x-2">
-          <p className="text-sm font-medium">{translate('pagination.rowsPerPage')}</p>
-          <Select
-            value={`${Math.min(tableQueryState?.size ?? pageSizePreference, MAX_PAGE_SIZE)}`}
-            onValueChange={(value) => setPageSize(value)}
-          >
-            <SelectTrigger className="h-8 w-[70px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {[10, 20, 30, 40, MAX_PAGE_SIZE].map((pageSize) => (
-                <SelectItem key={pageSize} value={`${pageSize}`}>
-                  {pageSize}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex w-fit items-center justify-center text-sm font-medium">
-          {translate('Common.pageOf', {
-            page: table.getState().pagination.pageIndex + 1,
-            total: table.getPageCount(),
-          })}
-        </div>
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            className="hidden h-8 w-8 p-0 lg:flex"
-            onClick={() => setPage(0)}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <span className="sr-only">{translate('pagination.buttons.goToFirstPage')}</span>
-            <ChevronsLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            className="h-8 w-8 p-0"
+      ) : null}
+      <div className="flex items-center gap-3 text-foreground/60">
+        <span className="tabular-nums">
+          {totalRows === 0
+            ? translate('Common.noResults', '0 results')
+            : `${rangeStart}–${rangeEnd} of ${totalRows}`}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            aria-label={translate('pagination.buttons.goToPreviousPage', 'Previous page')}
+            disabled={atFirst}
             onClick={() => setPage(table.getState().pagination.pageIndex - 1)}
-            disabled={!table.getCanPreviousPage()}
+            className="flex size-7 cursor-pointer items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
           >
-            <span className="sr-only">{translate('pagination.buttons.goToPreviousPage')}</span>
-            <ChevronLeftIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            className="h-8 w-8 p-0"
+            <ChevronLeftIcon className="size-3.5" />
+          </button>
+          <span className="tabular-nums text-foreground/70">
+            {currentPage} / {pageCount}
+          </span>
+          <button
+            type="button"
+            aria-label={translate('pagination.buttons.goToNextPage', 'Next page')}
+            disabled={atLast}
             onClick={() => setPage(table.getState().pagination.pageIndex + 1)}
-            disabled={!table.getCanNextPage()}
+            className="flex size-7 cursor-pointer items-center justify-center rounded-md text-foreground/60 transition-colors hover:bg-foreground/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
           >
-            <span className="sr-only">{translate('pagination.buttons.goToNextPage')}</span>
-            <ChevronRightIcon className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            className="hidden h-8 w-8 p-0 lg:flex"
-            onClick={() => setPage(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
-          >
-            <span className="sr-only">{translate('pagination.buttons.goToLastPage')}</span>
-            <ChevronsRightIcon className="h-4 w-4" />
-          </Button>
+            <ChevronRightIcon className="size-3.5" />
+          </button>
         </div>
       </div>
     </div>
